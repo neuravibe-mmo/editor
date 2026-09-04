@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { app, dialog, shell, type BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog, shell } from "electron";
 import { execFile } from "node:child_process";
 import { watch, type FSWatcher } from "node:fs";
 import { cp, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -1230,7 +1230,12 @@ export async function removeEntry(dir: string, path: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Watch
 
-const watchers = new Map<string, FSWatcher>();
+interface WatcherEntry {
+  watcher: FSWatcher;
+  windows: Set<BrowserWindow>;
+}
+
+const watchers = new Map<string, WatcherEntry>();
 
 /** How long a file we wrote ourselves stays exempt from the watcher. */
 const SELF_WRITE_GRACE = 1000;
@@ -1272,24 +1277,47 @@ function isSelfWrite(dir: string, path: string): boolean {
 }
 
 export function watchProject(window: BrowserWindow | null, dir: string): void {
-  if (watchers.has(dir)) return;
-  const watcher = watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename) return;
-    // Project-relative and `/`-separated; installs churn node_modules constantly.
-    const path = filename.split(sep).join("/");
-    if (path.startsWith("node_modules/") || path === "node_modules") return;
-    // The app's folder: a docs refresh writes the whole tree in one burst.
-    if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
-    if (isSelfWrite(dir, path)) return;
-    mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
-  });
-  watcher.on("error", () => unwatchProject(dir));
-  watchers.set(dir, watcher);
+  let entry = watchers.get(dir);
+  if (!entry) {
+    const windows = new Set<BrowserWindow>();
+    if (window && !window.isDestroyed()) windows.add(window);
+
+    const watcher = watch(dir, { recursive: true }, (_event, filename) => {
+      if (!filename) return;
+      // Project-relative and `/`-separated; installs churn node_modules constantly.
+      const path = filename.split(sep).join("/");
+      if (path.startsWith("node_modules/") || path === "node_modules") return;
+      // The app's folder: a docs refresh writes the whole tree in one burst.
+      if (path.startsWith(`${APP_DIR}/`) || path === APP_DIR) return;
+      if (isSelfWrite(dir, path)) return;
+
+      const currentEntry = watchers.get(dir);
+      const targets = currentEntry && currentEntry.windows.size > 0
+        ? [...currentEntry.windows]
+        : BrowserWindow.getAllWindows();
+
+      for (const win of targets) {
+        if (!win.isDestroyed()) {
+          mainBridge.emit(win, MAIN_CHANNELS.PROJECTS_CHANGED, { dir, path });
+        }
+      }
+    });
+
+    watcher.on("error", () => unwatchProject(dir));
+    watchers.set(dir, { watcher, windows });
+  } else {
+    if (window && !window.isDestroyed()) {
+      entry.windows.add(window);
+    }
+  }
 }
 
 export function unwatchProject(dir: string): void {
-  watchers.get(dir)?.close();
-  watchers.delete(dir);
+  const entry = watchers.get(dir);
+  if (entry) {
+    entry.watcher.close();
+    watchers.delete(dir);
+  }
 }
 
 export function unwatchAll(): void {
