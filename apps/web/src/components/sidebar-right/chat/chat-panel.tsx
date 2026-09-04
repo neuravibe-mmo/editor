@@ -6,6 +6,11 @@ import { For, Show, createEffect, createSignal } from "solid-js";
 import { useChat } from "@/context/chat";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { useExport } from "@/context/export";
+import { useWorld } from "@diffusionstudio/koota-solid";
+import { getActiveEntity } from "@diffusionstudio/runtime";
+import { getDefaultExportTemplate } from "@/components/sidebar-right/inspector/export-templates";
+import { toast } from "somoto";
 
 export function ChatPanel() {
   const {
@@ -16,6 +21,18 @@ export function ChatPanel() {
     sendMessage,
     clearMessages,
   } = useChat();
+
+  const world = useWorld();
+  const { exportScene } = useExport();
+
+  const handleExport = async () => {
+    const scene = getActiveEntity(world);
+    if (!scene) {
+      toast("Không tìm thấy cảnh (Scene) để xuất video");
+      return;
+    }
+    await exportScene(scene, getDefaultExportTemplate());
+  };
 
   const [inputVal, setInputVal] = createSignal("");
   let messagesEndRef: HTMLDivElement | undefined;
@@ -33,6 +50,19 @@ export function ChatPanel() {
   const handleSend = () => {
     const text = inputVal().trim();
     if (!text || isBusy()) return;
+
+    if (
+      text.toLowerCase().includes("xuat video") ||
+      text.toLowerCase().includes("xuất video") ||
+      text.toLowerCase().includes("export") ||
+      text.toLowerCase().includes("render")
+    ) {
+      setInputVal("");
+      if (textareaRef) textareaRef.style.height = "auto";
+      handleExport();
+      return;
+    }
+
     setInputVal("");
     if (textareaRef) textareaRef.style.height = "auto";
     sendMessage(text);
@@ -52,10 +82,11 @@ export function ChatPanel() {
   };
 
   const quickActions = [
+    { label: "🚀 Xuất video", action: handleExport },
+    { label: "🎵 Thêm nhạc nền", prompt: "Tìm các đoạn nhạc background hay để thêm vào video cho tôi" },
+    { label: "🎬 Hiệu ứng", prompt: "Thêm các hiệu ứng vào video cho tôi" },
     { label: "✂️ Cắt 0s - 4s", prompt: "Cắt video giữ lại từ 0s đến 4s" },
     { label: "🔍 Zoom In", prompt: "Thêm hiệu ứng keyframe zoom in phóng to video" },
-    { label: "✨ Fade In/Out", prompt: "Thêm hiệu ứng mờ dần fade in ở đầu và fade out ở cuối" },
-    { label: "📝 Intro chữ", prompt: 'Thêm tiêu đề Intro chữ "Diffusion Studio"' },
     { label: "🔄 Khôi phục", prompt: "Khôi phục video về trạng thái ban đầu" },
   ];
 
@@ -102,15 +133,27 @@ export function ChatPanel() {
             {agentStatus().provider}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-square"
-          class="text-muted-foreground hover:text-foreground h-7 w-7"
-          onClick={clearMessages}
-          title="Xóa lịch sử chat"
-        >
-          <Icon name="trash" class="w-3.5 h-3.5" />
-        </Button>
+        <div class="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="small"
+            class="h-7 px-2.5 text-[11px] gap-1.5 font-medium border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/60 transition-colors cursor-pointer"
+            onClick={handleExport}
+            title="Xuất file video (⌘E)"
+          >
+            <Icon name="arrow-right" class="w-3 h-3 -rotate-45" />
+            <span>Xuất video</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-square"
+            class="text-muted-foreground hover:text-foreground h-7 w-7"
+            onClick={clearMessages}
+            title="Xóa lịch sử chat"
+          >
+            <Icon name="trash" class="w-3.5 h-3.5" />
+          </Button>
+        </div>
       </div>
 
       {/* Quick Action Chips */}
@@ -118,9 +161,15 @@ export function ChatPanel() {
         <For each={quickActions}>
           {(action) => (
             <button
-              class="text-[11px] whitespace-nowrap px-2.5 py-1 rounded-lg bg-muted/40 hover:bg-primary/20 hover:text-primary hover:border-primary/40 border border-border text-muted-foreground transition-all shrink-0 active:scale-95 disabled:opacity-50"
+              class="text-[11px] whitespace-nowrap px-2.5 py-1 rounded-lg bg-muted/40 hover:bg-primary/20 hover:text-primary hover:border-primary/40 border border-border text-muted-foreground transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer"
               disabled={isBusy()}
-              onClick={() => sendMessage(action.prompt)}
+              onClick={() => {
+                if (action.action) {
+                  action.action();
+                } else if (action.prompt) {
+                  sendMessage(action.prompt);
+                }
+              }}
             >
               {action.label}
             </button>
