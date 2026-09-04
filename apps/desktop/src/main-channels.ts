@@ -67,12 +67,17 @@ export const MAIN_CHANNELS = {
   PROJECTS_FS_REMOVE: "projects:fs-remove",
   PROJECTS_FS_REAL_PATH: "projects:fs-real-path",
 
+  // Agent Chat channels
+  AGENT_STATUS: "agent:status",
+  AGENT_CHAT_SEND: "agent:chat:send",
+
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
   CHECKOUT_CALLBACK: "checkout:callback",
   WINDOW_FULLSCREEN_CHANGE: "window:fullscreen-change",
   HEADLESS_MODE: "headless:mode",
   PROJECTS_CHANGED: "projects:changed",
+  AGENT_CHAT_EVENT: "agent:chat:event",
 } as const;
 
 /**
@@ -203,6 +208,19 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.PROJECTS_FS_STAT]: { request: { dir: string; source: string }; response: FsStat | null };
   [MAIN_CHANNELS.PROJECTS_FS_REMOVE]: { request: { dir: string; path: string }; response: void };
   [MAIN_CHANNELS.PROJECTS_FS_REAL_PATH]: { request: { dir: string; source: string }; response: string | null };
+  [MAIN_CHANNELS.AGENT_STATUS]: {
+    request: void;
+    response: { connected: boolean; provider: string; model: string };
+  };
+  [MAIN_CHANNELS.AGENT_CHAT_SEND]: {
+    request: {
+      id: string;
+      dir: string;
+      prompt: string;
+      currentTime?: number | null;
+    };
+    response: { ok: boolean; messageId: string };
+  };
 };
 
 export type FsEntry = {
@@ -223,6 +241,15 @@ export type MainEventMap = {
   [MAIN_CHANNELS.HEADLESS_MODE]: { active: boolean };
   // A file inside a watched project folder changed (path relative to `dir`).
   [MAIN_CHANNELS.PROJECTS_CHANGED]: { dir: string; path: string };
+  [MAIN_CHANNELS.AGENT_CHAT_EVENT]: {
+    id: string;
+    type: "chunk" | "status" | "done" | "error";
+    text?: string;
+    statusText?: string;
+    error?: string;
+    editsApplied?: boolean;
+    modifiedCode?: string;
+  };
 };
 export type MainEventChannel = keyof MainEventMap;
 

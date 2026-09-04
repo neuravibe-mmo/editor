@@ -12,6 +12,8 @@ type LayoutContextValue = {
   timelineMinimized: Accessor<boolean>;
   timelineHeight: Accessor<number>;
   setTimelineHeight(height: number): void;
+  rightSidebarWidth: Accessor<number>;
+  setRightSidebarWidth(width: number): void;
   toggleUI(): void;
   toggleTimeline(): void;
 };
@@ -20,6 +22,10 @@ const LayoutContext = createContext<LayoutContextValue>();
 
 export const MIN_TIMELINE_HEIGHT = 120;
 export const DEFAULT_TIMELINE_HEIGHT = 234;
+
+export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
+export const MAX_RIGHT_SIDEBAR_WIDTH = 650;
+export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 320;
 
 export function LayoutProvider(props: { children: JSX.Element }) {
   const [uiVisible, setUiVisible] = createStoredSignal(
@@ -33,6 +39,10 @@ export function LayoutProvider(props: { children: JSX.Element }) {
     store.define<boolean>('layout.timelineMinimized', false),
   );
 
+  const [rightSidebarWidth, setRightSidebarWidth] = createStoredSignal(
+    store.define<number>('layout.rightSidebarWidth', DEFAULT_RIGHT_SIDEBAR_WIDTH),
+  );
+
   const toggleUI = () => setUiVisible(!uiVisible());
   const toggleTimeline = () => setTimelineMinimized(!timelineMinimized());
 
@@ -43,6 +53,8 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         timelineMinimized,
         timelineHeight,
         setTimelineHeight,
+        rightSidebarWidth,
+        setRightSidebarWidth,
         toggleUI,
         toggleTimeline,
       }}>

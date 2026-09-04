@@ -13,6 +13,7 @@ import { installCli, isCliInstalled } from "./cli-install";
 import { healSkillsLinks, installSkills, isSkillsInstalled } from "./skills-install";
 import { trackInstall } from "./analytics";
 import { setupAppMenu } from "./menu";
+import { getAgentStatus, handleAgentChat } from "./agent-bridge";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import {
@@ -269,6 +270,10 @@ if (app.requestSingleInstanceLock()) {
   );
   mainBridge.handle(MAIN_CHANNELS.CHECKOUT_GET_PENDING_CALLBACK, () =>
     takePendingDeepLink(MAIN_CHANNELS.CHECKOUT_CALLBACK),
+  );
+  mainBridge.handle(MAIN_CHANNELS.AGENT_STATUS, () => getAgentStatus());
+  mainBridge.handle(MAIN_CHANNELS.AGENT_CHAT_SEND, (req, event) =>
+    handleAgentChat(BrowserWindow.fromWebContents(event.sender), req),
   );
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {

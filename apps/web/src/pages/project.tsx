@@ -14,6 +14,7 @@ import { projectRoute, useProjectRef } from '@/hooks/use-project-route';
 import { resolveProject } from '@/projects';
 import { TimelineProvider } from '@/context/timeline';
 import { EngineProvider } from '@/engine';
+import { ChatProvider } from '@/context/chat';
 
 /** `/projects/*ref` — the editor, with the project `ref` names loaded. */
 export function ProjectPage() {
@@ -60,7 +61,9 @@ export function ProjectPage() {
                   <ExportProvider>
                     <PromptInputProvider>
                       <LayoutProvider>
-                        <EditorPage />
+                        <ChatProvider>
+                          <EditorPage />
+                        </ChatProvider>
                       </LayoutProvider>
                     </PromptInputProvider>
                   </ExportProvider>

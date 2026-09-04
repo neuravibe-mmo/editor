@@ -5,9 +5,9 @@
 import { Show, createMemo, createSignal } from "solid-js";
 import { Canvas } from "@/components/canvas";
 import { Timeline, Layers } from "@/components/timeline";
-import { Soundboard, Inspector } from "@/components/sidebar-right";
+import { Soundboard, RightSidebar } from "@/components/sidebar-right";
 import { FloatingProjectHeader, SidebarLeft } from "@/components/sidebar-left";
-import { useLayout, MIN_TIMELINE_HEIGHT } from "@/context/layout";
+import { useLayout, MIN_TIMELINE_HEIGHT, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from "@/context/layout";
 import { useEditorApi } from "@/context/dapi";
 import { RULER_HEIGHT } from "@/engine/timeline";
 import { createEffect, onCleanup, untrack } from 'solid-js';
@@ -34,9 +34,17 @@ import type { EditWriter } from '@/projects/edits';
 const MIN_CANVAS_HEIGHT = 200;
 
 export function EditorPage() {
-  const { uiVisible, timelineMinimized, timelineHeight, setTimelineHeight } = useLayout();
+  const {
+    uiVisible,
+    timelineMinimized,
+    timelineHeight,
+    setTimelineHeight,
+    rightSidebarWidth,
+    setRightSidebarWidth,
+  } = useLayout();
   const { isDesktop, isFullscreen } = useEditorApi();
   const [resizing, setResizing] = createSignal(false);
+  const [rightSidebarResizing, setRightSidebarResizing] = createSignal(false);
   const project = useProject();
   const world = useWorld();
   const engine = useEngineContext();
@@ -181,13 +189,15 @@ export function EditorPage() {
     });
   });
 
-  const timelineStyles = createMemo(() => {
-    if (!uiVisible()) return;
+  const gridStyles = createMemo(() => {
+    if (!uiVisible()) return {};
 
     const height = timelineMinimized() ? RULER_HEIGHT : timelineHeight();
+    const rightWidth = rightSidebarWidth();
 
     return {
       'grid-template-rows': `1fr 1px ${height}px`,
+      'grid-template-columns': `264px 1px 1fr 1px ${rightWidth}px`,
     };
   });
 
@@ -218,15 +228,44 @@ export function EditorPage() {
     document.addEventListener('pointerup', handleEnd);
   };
 
+  const handleRightSidebarResizeStart = (e: PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = rightSidebarWidth();
+    setRightSidebarResizing(true);
+
+    const handleMove = (ev: PointerEvent) => {
+      const deltaX = startX - ev.clientX;
+      const maxAllowed = Math.max(
+        MIN_RIGHT_SIDEBAR_WIDTH,
+        window.innerWidth - 400,
+      );
+      const next = Math.max(
+        MIN_RIGHT_SIDEBAR_WIDTH,
+        Math.min(MAX_RIGHT_SIDEBAR_WIDTH, Math.min(maxAllowed, startWidth + deltaX)),
+      );
+      setRightSidebarWidth(next);
+    };
+
+    const handleEnd = () => {
+      setRightSidebarResizing(false);
+      document.removeEventListener('pointermove', handleMove);
+      document.removeEventListener('pointerup', handleEnd);
+    };
+
+    document.addEventListener('pointermove', handleMove);
+    document.addEventListener('pointerup', handleEnd);
+  };
+
   return (
     <div
       class="bg-sidebar h-screen w-full overflow-hidden grid"
       classList={{
-        'grid-cols-[264px_1px_1fr_1px_264px]': uiVisible(),
         'grid-cols-[1fr]': !uiVisible(),
         'grid-rows-[1fr]': !uiVisible(),
       }}
-      style={timelineStyles()}
+      style={gridStyles()}
     >
       <Show when={isDesktop && !isFullscreen()}>
         <div class="fixed top-0 left-0 right-0 h-10 z-20" style="-webkit-app-region: drag;" />
@@ -237,8 +276,18 @@ export function EditorPage() {
       </Show>
       <Canvas />
       <Show when={uiVisible()}>
-        <div class="bg-border-strong" />
-        <Inspector />
+        <div class="bg-border-strong relative h-full">
+          <div
+            class="absolute top-0 bottom-0 -left-1 -right-1 z-20 cursor-ew-resize group"
+            onPointerDown={handleRightSidebarResizeStart}
+          >
+            <div
+              class="absolute top-0 bottom-0 left-1 w-px transition-colors group-hover:bg-primary"
+              classList={{ 'bg-primary': rightSidebarResizing() }}
+            />
+          </div>
+        </div>
+        <RightSidebar />
       </Show>
       <Show when={uiVisible()}>
         <div class="col-span-full bg-border-strong relative">
