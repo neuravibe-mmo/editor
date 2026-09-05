@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "somoto";
-import { For, Show, batch, createMemo, createResource, createSignal, onCleanup } from "solid-js";
+import { For, Show, batch, createMemo, createResource, createSignal, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 
 import {
@@ -236,6 +236,17 @@ export function DashboardProjectsView() {
       setCreating(false);
     }
   };
+
+  onMount(() => {
+    const onNewProject = () => handleCreateProject();
+    const onOpenAccount = () => navigate("/?dashboard=account");
+    window.addEventListener("vixa:new-project", onNewProject);
+    window.addEventListener("vixa:open-account", onOpenAccount);
+    onCleanup(() => {
+      window.removeEventListener("vixa:new-project", onNewProject);
+      window.removeEventListener("vixa:open-account", onOpenAccount);
+    });
+  });
 
   return (
     <DashboardSearchPanel

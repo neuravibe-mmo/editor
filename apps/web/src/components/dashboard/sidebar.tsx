@@ -67,11 +67,6 @@ export function DashboardSidebarNav(props: DashboardSidebarNavProps) {
   return (
     <div class="flex min-h-0 flex-1 flex-col gap-2 px-3">
       <div class="flex shrink-0 flex-col">
-        <div class="flex h-8 shrink-0 items-center px-1">
-          <p class="text-xs text-muted-foreground">
-            Get Started
-          </p>
-        </div>
         {props.children}
       </div>
       <div class="min-h-0 flex-1" />
