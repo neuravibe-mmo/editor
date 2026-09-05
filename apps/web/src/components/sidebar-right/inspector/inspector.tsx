@@ -88,9 +88,10 @@ export function Inspector() {
   const selectionTarget = createMemo<SelectionTarget>(() => {
     if (tool() === ToolType.SCENE) return "scene-tool";
     if (keyframes().length > 0) return "keyframe";
-    if (asset()) return "asset";
     const entity = first();
     if (nodes().length === 1 && entity) return classifyNode(entity);
+    if (nodes().length > 1) return "stage";
+    if (asset()) return "asset";
     return "stage";
   });
 

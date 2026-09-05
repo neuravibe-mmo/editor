@@ -22,6 +22,7 @@
     "check": "npm run check --workspaces --if-present && tsc -p examples --noEmit"
   },
   "devDependencies": {
+    "electron": "^43.1.1",
     "patch-package": "^8.0.1"
   }
 }

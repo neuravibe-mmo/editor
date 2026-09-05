@@ -3,11 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { store } from '../../world/store';
-import { CaptionAlign, CaptionType, PaintType, FontStyle, TextAlign, TextBaseline, TextCase } from '../../constants';
-import { Paint, Color, Caption, ItemIndex, TextRange, TextStyle } from '../../traits';
+import { CaptionAlign, CaptionType, PaintType, FontStyle, StrokeCap, StrokeJoin, TextAlign, TextBaseline, TextCase } from '../../constants';
+import { Paint, Color, Caption, TextRange, Shadow, Opacity, Blur, Offset, Stroke, StrokeStyle } from '../../traits';
 import { renderText } from '../../utils/text';
 import { loadWebFont } from '../../fonts/utils';
-import { groupBy, findActiveGroup, splitSequence, clearTextRanges, resolveTranscript, setChars } from './utils';
+import { groupBy, findActiveGroup, clearTextRanges, resolveTranscript, setChars } from './utils';
 import { placeCaption } from './position';
 import { createEntity } from '../../actions/entities';
 import { appendChild } from '../../actions/hierarchy';
@@ -17,30 +17,23 @@ import type { Asset } from '@diffusionstudio/assets';
 import type { CaptionDecoder, CaptionPresetStyle } from './types';
 
 const WIDTH = 700;
-const HEIGHT = 200;
+const HEIGHT = 140;
+export const HORMOZI_HIGHLIGHT_COLOR = 0xFFE500;
 
-// The preset's base TextStyle; the document writes it and authored style
-// props overwrite it (see CAPTION_PRESET_STYLES).
-export const GUINEA_TEXT_STYLE = {
+export const HORMOZI_TEXT_STYLE = {
 	fontFamily: 'Montserrat',
 	fontWeight: '900',
-	fontSize: 62,
+	fontStyle: FontStyle.NORMAL,
+	fontSize: 74,
 	textAlign: TextAlign.CENTER,
 	textBaseline: TextBaseline.MIDDLE,
 	textCase: TextCase.UPPER,
-	fontStyle: FontStyle.NORMAL,
 	leading: 1,
-	letterSpacing: undefined,
+	letterSpacing: 1,
 } as const satisfies CaptionPresetStyle;
 
-const HIGHLIGHT_COLOR_0 = 0xF55353;
-const HIGHLIGHT_COLOR_1 = 0xFEB139;
-const HIGHLIGHT_COLOR_2 = 0xF6F54D;
-
-const PSEUDO_RANDOM_SEQUENCE = [0, 1, 0, 2, 1, 1, 0, 0, 1, 0, 2, 1, 0, 2, 1, 0, 2, 1];
-
-export class GuineaCaptionDecoder implements CaptionDecoder {
-	public readonly type = CaptionType.GUINEA;
+export class HormoziCaptionDecoder implements CaptionDecoder {
+	public readonly type = CaptionType.HORMOZI;
 	public groups: ReturnType<typeof groupBy> = [];
 	public ready = false;
 	public styled = false;
@@ -48,9 +41,9 @@ export class GuineaCaptionDecoder implements CaptionDecoder {
 
 	private readonly asset: Asset;
 	private currentGroupIndex = -1;
-	private activeSplit: 'left' | 'right' | null = null;
+	private currentWordIndex = -1;
 	private fill: Entity | null = null;
-	private colorIndex = 0;
+	private range: Entity | null = null;
 
 	constructor(asset: Asset) {
 		this.asset = asset;
@@ -60,7 +53,7 @@ export class GuineaCaptionDecoder implements CaptionDecoder {
 	private async init() {
 		if (this.ready) return;
 		const transcript = await resolveTranscript(this.asset);
-		this.groups = groupBy(transcript, { length: 18 });
+		this.groups = groupBy(transcript, { length: 14 });
 		this.ready = true;
 	}
 
@@ -71,7 +64,31 @@ export class GuineaCaptionDecoder implements CaptionDecoder {
 	public applyStyles(world: World, entity: Entity): boolean {
 		if (!this.reposition(world, entity)) return false;
 
-		loadWebFont(world, GUINEA_TEXT_STYLE.fontFamily);
+		// Heavy black stroke
+		const stroke = createEntity(world);
+		stroke.add(Stroke);
+		stroke.add(Paint);
+		stroke.set(Paint, { value: PaintType.SOLID });
+		stroke.add(Color);
+		stroke.set(Color, { value: 0x000000 });
+		stroke.add(StrokeStyle);
+		stroke.set(StrokeStyle, { width: 6, join: StrokeJoin.ROUND, cap: StrokeCap.ROUND });
+		appendChild(world, stroke, entity);
+
+		// Deep drop shadow
+		const shadow = createEntity(world);
+		shadow.add(Shadow);
+		shadow.add(Color);
+		shadow.set(Color, { value: 0x000000 });
+		shadow.add(Opacity);
+		shadow.set(Opacity, { value: 1 });
+		shadow.add(Blur);
+		shadow.set(Blur, { value: 16 });
+		shadow.add(Offset);
+		shadow.set(Offset, { x: 0, y: 6 });
+		appendChild(world, shadow, entity);
+
+		loadWebFont(world, HORMOZI_TEXT_STYLE.fontFamily);
 		return true;
 	}
 
@@ -81,65 +98,59 @@ export class GuineaCaptionDecoder implements CaptionDecoder {
 		if (groupIndex === -1) {
 			setChars(world, entity, '');
 			clearTextRanges(world, entity);
+			this.fill = null;
+			this.range = null;
 			this.currentGroupIndex = -1;
-			this.activeSplit = null;
+			this.currentWordIndex = -1;
 			return;
 		}
 
 		const group = this.groups[groupIndex]!;
-		const [left, right] = splitSequence(group);
-		const leftText = left.map(w => w.text).join(' ');
-		const rightText = right.map(w => w.text).join(' ');
-		const text = rightText ? `${leftText}\n${rightText}` : leftText;
-		const activeSplit = right.length > 0 && relativeTime >= right[0]!.start ? 'right' : 'left';
+		const wordIndex = group.findIndex(word =>
+			relativeTime >= word.start && relativeTime <= word.end
+		);
 
-		if (groupIndex !== this.currentGroupIndex || activeSplit !== this.activeSplit) {
+		const text = group.map(w => w.text).join(' ');
+
+		if (groupIndex !== this.currentGroupIndex || wordIndex !== this.currentWordIndex) {
 			this.currentGroupIndex = groupIndex;
-			this.activeSplit = activeSplit;
+			this.currentWordIndex = wordIndex;
 			setChars(world, entity, text);
 
-			// Active line gets a random highlight color and a slightly larger font (1.1x).
 			clearTextRanges(world, entity);
-			const start = activeSplit === 'left' ? 0 : leftText.length + 1;
-			const end = activeSplit === 'left' ? leftText.length : text.length;
-			if (end > start) {
-				const baseSize = store(world, TextStyle).fontSize[entity.id()] ?? 62;
-				const fontSize = Math.round(baseSize * 1.1);
+			this.fill = null;
+			this.range = null;
 
+			if (wordIndex !== -1) {
+				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
+				const end = start + group[wordIndex]!.text.length;
 				const range = createEntity(world);
 				range.add(TextRange);
 				range.set(TextRange, { start, end });
-				range.add(TextStyle);
-				range.set(TextStyle, { fontSize });
+				range.add(Color);
+				range.set(Color, { value: HORMOZI_HIGHLIGHT_COLOR });
 				appendChild(world, range, entity);
+				this.range = range;
 
 				const fill = createEntity(world);
 				fill.add(Paint);
 				fill.set(Paint, { value: PaintType.SOLID });
 				fill.add(Color);
-				fill.set(Color, { value: HIGHLIGHT_COLOR_0 });
-				fill.add(ItemIndex);
-				fill.set(ItemIndex, { value: 0 });
+				fill.set(Color, { value: HORMOZI_HIGHLIGHT_COLOR });
 				appendChild(world, fill, range);
 				this.fill = fill;
-
-				this.colorIndex++;
 			}
 		}
 	}
 
 	public draw(world: World, entity: Entity): void {
-		const authored = entity.get(Caption)?.colors;
-		const colors = [
-			authored?.[0] ?? HIGHLIGHT_COLOR_0,
-			authored?.[1] ?? HIGHLIGHT_COLOR_1,
-			authored?.[2] ?? HIGHLIGHT_COLOR_2,
-		] as const;
+		const highlightColor = entity.get(Caption)?.colors?.[0] ?? HORMOZI_HIGHLIGHT_COLOR;
 
-		const index = PSEUDO_RANDOM_SEQUENCE[this.colorIndex % PSEUDO_RANDOM_SEQUENCE.length]!;
-
+		if (this.range) {
+			store(world, Color).value[this.range.id()] = highlightColor;
+		}
 		if (this.fill) {
-			store(world, Color).value[this.fill.id()] = colors[index]!;
+			store(world, Color).value[this.fill.id()] = highlightColor;
 		}
 
 		renderText(world, entity);
@@ -148,6 +159,6 @@ export class GuineaCaptionDecoder implements CaptionDecoder {
 	public dispose(): void {
 		this.groups = [];
 		this.currentGroupIndex = -1;
-		this.activeSplit = null;
+		this.currentWordIndex = -1;
 	}
 }

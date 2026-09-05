@@ -2,39 +2,37 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { BlendModeType, CaptionAlign, CaptionType, PaintType, FontStyle, TextAlign, TextBaseline, TextCase } from '../../constants';
-import { Paint, Color, BlendMode } from '../../traits';
+import { CaptionAlign, CaptionType, PaintType, FontStyle, StrokeCap, StrokeJoin, TextAlign, TextBaseline, TextCase } from '../../constants';
+import { Paint, Color, Shadow, Opacity, Blur, Offset, Stroke, StrokeStyle } from '../../traits';
 import { renderText } from '../../utils/text';
 import { loadWebFont } from '../../fonts/utils';
-import { groupBy, findActiveGroup, resolveTranscript, setChars } from './utils';
+import { findActiveGroup, resolveTranscript, setChars } from './utils';
 import { placeCaption } from './position';
 import { createEntity } from '../../actions/entities';
 import { appendChild } from '../../actions/hierarchy';
 
 import type { Entity, World } from 'koota';
-import type { Asset } from '@diffusionstudio/assets';
+import type { Asset, WordGroup } from '@diffusionstudio/assets';
 import type { CaptionDecoder, CaptionPresetStyle } from './types';
 
-const WIDTH = 700;
-const HEIGHT = 100;
+const WIDTH = 600;
+const HEIGHT = 140;
 
-// The preset's base TextStyle; the document writes it and authored style
-// props overwrite it (see CAPTION_PRESET_STYLES).
-export const STARK_TEXT_STYLE = {
-	fontFamily: 'Figtree',
-	fontWeight: '800',
-	fontSize: 70,
+export const ONE_WORD_TEXT_STYLE = {
+	fontFamily: 'Montserrat',
+	fontWeight: '900',
+	fontStyle: FontStyle.NORMAL,
+	fontSize: 84,
 	textAlign: TextAlign.CENTER,
 	textBaseline: TextBaseline.MIDDLE,
 	textCase: TextCase.UPPER,
-	fontStyle: FontStyle.NORMAL,
 	leading: 1,
-	letterSpacing: undefined,
+	letterSpacing: 2,
 } as const satisfies CaptionPresetStyle;
 
-export class StarkCaptionDecoder implements CaptionDecoder {
-	public readonly type = CaptionType.STARK;
-	public groups: ReturnType<typeof groupBy> = [];
+export class OneWordCaptionDecoder implements CaptionDecoder {
+	public readonly type = CaptionType.ONE_WORD;
+	public groups: WordGroup[] = [];
 	public ready = false;
 	public styled = false;
 	public readonly initPromise: Promise<void>;
@@ -50,7 +48,7 @@ export class StarkCaptionDecoder implements CaptionDecoder {
 	private async init() {
 		if (this.ready) return;
 		const transcript = await resolveTranscript(this.asset);
-		this.groups = groupBy(transcript, { duration: 0.2 });
+		this.groups = transcript.flatMap(segment => segment.words.map(w => [w]));
 		this.ready = true;
 	}
 
@@ -61,16 +59,29 @@ export class StarkCaptionDecoder implements CaptionDecoder {
 	public applyStyles(world: World, entity: Entity): boolean {
 		if (!this.reposition(world, entity)) return false;
 
-		const fill = createEntity(world);
-		fill.add(Paint);
-		fill.set(Paint, { value: PaintType.SOLID });
-		fill.add(Color);
-		fill.set(Color, { value: 0xFFFFFF });
-		fill.add(BlendMode);
-		fill.set(BlendMode, { value: BlendModeType.DIFFERENCE });
-		appendChild(world, fill, entity);
+		const stroke = createEntity(world);
+		stroke.add(Stroke);
+		stroke.add(Paint);
+		stroke.set(Paint, { value: PaintType.SOLID });
+		stroke.add(Color);
+		stroke.set(Color, { value: 0x000000 });
+		stroke.add(StrokeStyle);
+		stroke.set(StrokeStyle, { width: 6, join: StrokeJoin.ROUND, cap: StrokeCap.ROUND });
+		appendChild(world, stroke, entity);
 
-		loadWebFont(world, STARK_TEXT_STYLE.fontFamily);
+		const shadow = createEntity(world);
+		shadow.add(Shadow);
+		shadow.add(Color);
+		shadow.set(Color, { value: 0x000000 });
+		shadow.add(Opacity);
+		shadow.set(Opacity, { value: 1 });
+		shadow.add(Blur);
+		shadow.set(Blur, { value: 20 });
+		shadow.add(Offset);
+		shadow.set(Offset, { x: 0, y: 6 });
+		appendChild(world, shadow, entity);
+
+		loadWebFont(world, ONE_WORD_TEXT_STYLE.fontFamily);
 		return true;
 	}
 
@@ -83,9 +94,11 @@ export class StarkCaptionDecoder implements CaptionDecoder {
 			return;
 		}
 
+		const group = this.groups[groupIndex]!;
+
 		if (groupIndex !== this.currentGroupIndex) {
 			this.currentGroupIndex = groupIndex;
-			setChars(world, entity, this.groups[groupIndex]!.map(w => w.text).join(' '));
+			setChars(world, entity, group[0]?.text ?? '');
 		}
 	}
 

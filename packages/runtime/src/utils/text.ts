@@ -557,7 +557,9 @@ export function transformText(text: string, textCase?: number): string {
  */
 function getIntrinsicColor(world: World, entity: Entity, ranges: Entity[]): string | null {
 	const computed = store(world, Computed);
-	let value: number | undefined = entity.has(Color) ? computed.color[entity.id()] ?? 0 : undefined;
+	let value: number | undefined = entity.has(Color)
+		? computed.color[entity.id()] ?? store(world, Color).value[entity.id()] ?? 0
+		: undefined;
 
 	for (const range of ranges) {
 		if (range.has(Color)) {

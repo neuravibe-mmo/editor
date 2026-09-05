@@ -144,6 +144,9 @@ function forwardCaptionDecoder(world: World, _scene: Entity, entity: Entity): vo
 	const fps = world.get(FrameRate)?.value ?? 30;
 
 	const decoder = resolveCaptionDecoder(world, entity);
+	if (decoder && !decoder.ready) {
+		framePromises(world)?.push(decoder.initPromise);
+	}
 	decoder?.seekTo(world, entity, localFrame / fps);
 }
 

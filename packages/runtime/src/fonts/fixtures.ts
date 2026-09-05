@@ -33,7 +33,15 @@ export const WebFonts = {
 	},
 	Montserrat: {
 		weights: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
-		url: 'https://fonts.gstatic.com/s/montserrat/v26/JTUSjIg1_i6t8kCHKm459WlhyyTh89Y.woff2',
+		url: 'https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCvC70w-.ttf',
+	},
+	'Be Vietnam Pro': {
+		weights: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
+		url: 'https://fonts.gstatic.com/s/bevietnampro/v12/QdVMSTAyLFyeg_IDWvOJmVES_HS0Il8y.ttf',
+	},
+	Anton: {
+		weights: ['400'],
+		url: 'https://fonts.gstatic.com/s/anton/v27/1Ptgg87LROyAm0K0.ttf',
 	},
 	Bangers: {
 		weights: ['400'],

@@ -33,6 +33,31 @@ export const CAPTION_PRESET_OPTIONS: CaptionPresetOption[] = [
     label: "Spotlight",
     slots: [{ label: "Highlight", defaultColor: 0x24D5FF }],
   },
+  {
+    name: "hormozi",
+    label: "Hormozi (MrBeast)",
+    slots: [{ label: "Highlight", defaultColor: 0xFFE500 }],
+  },
+  {
+    name: "karaoke",
+    label: "Karaoke",
+    slots: [{ label: "Highlight", defaultColor: 0x24D5FF }],
+  },
+  { name: "oneWord", label: "One Word", slots: [] },
+  {
+    name: "neon",
+    label: "Neon Glow",
+    slots: [
+      { label: "Glow", defaultColor: 0x00F0FF },
+      { label: "Active Word", defaultColor: 0xFF007F },
+    ],
+  },
+  {
+    name: "comic",
+    label: "Comic Pop",
+    slots: [{ label: "Active Word", defaultColor: 0xFFFFFF }],
+  },
+  { name: "cinematic", label: "Cinematic", slots: [] },
   { name: "whisper", label: "Whisper", slots: [] },
   { name: "paper", label: "Paper", slots: [] },
   {

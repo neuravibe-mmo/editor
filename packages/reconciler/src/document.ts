@@ -261,6 +261,12 @@ export const CAPTION_PRESETS: Record<string, CaptionType> = {
 	paper: CaptionType.PAPER,
 	guinea: CaptionType.GUINEA,
 	stark: CaptionType.STARK,
+	hormozi: CaptionType.HORMOZI,
+	karaoke: CaptionType.KARAOKE,
+	oneWord: CaptionType.ONE_WORD,
+	neon: CaptionType.NEON,
+	comic: CaptionType.COMIC,
+	cinematic: CaptionType.CINEMATIC,
 };
 
 export const CAPTION_ALIGNS: Record<string, CaptionAlign> = {

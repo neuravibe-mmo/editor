@@ -30,6 +30,7 @@ export interface CaptionDecoder {
 	groups: WordGroup[];
 	ready: boolean;
 	styled: boolean;
+	readonly initPromise: Promise<void>;
 	applyStyles(world: World, entity: Entity): boolean;
 	reposition(world: World, entity: Entity): boolean;
 	seekTo(world: World, entity: Entity, relativeTime: number): void;

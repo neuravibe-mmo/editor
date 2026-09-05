@@ -34,13 +34,14 @@ export class CascadeCaptionDecoder implements CaptionDecoder {
 	public groups: ReturnType<typeof groupBy> = [];
 	public ready = false;
 	public styled = false;
+	public readonly initPromise: Promise<void>;
 
 	private readonly asset: Asset;
 	private currentText = '';
 
 	constructor(asset: Asset) {
 		this.asset = asset;
-		this.init();
+		this.initPromise = this.init();
 	}
 
 	private async init() {

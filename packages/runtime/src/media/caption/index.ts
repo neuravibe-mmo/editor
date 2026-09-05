@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { CaptionType } from '../../constants';
-import { AssetId, Caption, ChildOf, Paint, Shadow, Source, TextRange, CaptionDecoderHandle } from '../../traits';
+import { AssetId, Caption, ChildOf, Paint, Shadow, Source, Stroke, TextRange, CaptionDecoderHandle } from '../../traits';
 import { getAsset } from '../../actions/assets';
 import { deleteEntity } from '../../actions/entities';
 import { ClassicCaptionDecoder, CLASSIC_TEXT_STYLE } from './classic';
@@ -13,6 +13,12 @@ import { WhisperCaptionDecoder, WHISPER_TEXT_STYLE } from './whisper';
 import { PaperCaptionDecoder, PAPER_TEXT_STYLE } from './paper';
 import { GuineaCaptionDecoder, GUINEA_TEXT_STYLE } from './guinea';
 import { StarkCaptionDecoder, STARK_TEXT_STYLE } from './stark';
+import { HormoziCaptionDecoder, HORMOZI_TEXT_STYLE } from './hormozi';
+import { KaraokeCaptionDecoder, KARAOKE_TEXT_STYLE, KARAOKE_BASE_COLOR } from './karaoke';
+import { OneWordCaptionDecoder, ONE_WORD_TEXT_STYLE } from './one-word';
+import { NeonCaptionDecoder, NEON_TEXT_STYLE } from './neon';
+import { ComicCaptionDecoder, COMIC_TEXT_STYLE, COMIC_BASE_COLOR } from './comic';
+import { CinematicCaptionDecoder, CINEMATIC_TEXT_STYLE } from './cinematic';
 
 import type { Entity, World } from 'koota';
 import type { Asset } from '@diffusionstudio/assets';
@@ -26,6 +32,12 @@ export { WhisperCaptionDecoder } from './whisper';
 export { PaperCaptionDecoder } from './paper';
 export { GuineaCaptionDecoder } from './guinea';
 export { StarkCaptionDecoder } from './stark';
+export { HormoziCaptionDecoder } from './hormozi';
+export { KaraokeCaptionDecoder } from './karaoke';
+export { OneWordCaptionDecoder } from './one-word';
+export { NeonCaptionDecoder } from './neon';
+export { ComicCaptionDecoder } from './comic';
+export { CinematicCaptionDecoder } from './cinematic';
 export * from './position';
 export * from './subtitles';
 export * from './utils';
@@ -44,6 +56,12 @@ export const CAPTION_PRESET_STYLES: Record<CaptionType, CaptionPresetStyle> = {
 	[CaptionType.PAPER]: PAPER_TEXT_STYLE,
 	[CaptionType.GUINEA]: GUINEA_TEXT_STYLE,
 	[CaptionType.STARK]: STARK_TEXT_STYLE,
+	[CaptionType.HORMOZI]: HORMOZI_TEXT_STYLE,
+	[CaptionType.KARAOKE]: KARAOKE_TEXT_STYLE,
+	[CaptionType.ONE_WORD]: ONE_WORD_TEXT_STYLE,
+	[CaptionType.NEON]: NEON_TEXT_STYLE,
+	[CaptionType.COMIC]: COMIC_TEXT_STYLE,
+	[CaptionType.CINEMATIC]: CINEMATIC_TEXT_STYLE,
 };
 
 /**
@@ -61,6 +79,12 @@ export const CAPTION_PRESET_FILLS: Record<CaptionType, number | undefined> = {
 	[CaptionType.PAPER]: 0xFFFFFF,
 	[CaptionType.GUINEA]: 0xFFFFFF,
 	[CaptionType.STARK]: undefined,
+	[CaptionType.HORMOZI]: 0xFFFFFF,
+	[CaptionType.KARAOKE]: KARAOKE_BASE_COLOR,
+	[CaptionType.ONE_WORD]: 0xFFFFFF,
+	[CaptionType.NEON]: 0xFFFFFF,
+	[CaptionType.COMIC]: COMIC_BASE_COLOR,
+	[CaptionType.CINEMATIC]: 0xFFFFFF,
 };
 
 function createCaptionDecoder(type: CaptionType, asset: Asset): CaptionDecoder {
@@ -79,6 +103,18 @@ function createCaptionDecoder(type: CaptionType, asset: Asset): CaptionDecoder {
 			return new GuineaCaptionDecoder(asset);
 		case CaptionType.STARK:
 			return new StarkCaptionDecoder(asset);
+		case CaptionType.HORMOZI:
+			return new HormoziCaptionDecoder(asset);
+		case CaptionType.KARAOKE:
+			return new KaraokeCaptionDecoder(asset);
+		case CaptionType.ONE_WORD:
+			return new OneWordCaptionDecoder(asset);
+		case CaptionType.NEON:
+			return new NeonCaptionDecoder(asset);
+		case CaptionType.COMIC:
+			return new ComicCaptionDecoder(asset);
+		case CaptionType.CINEMATIC:
+			return new CinematicCaptionDecoder(asset);
 		default:
 			return new ClassicCaptionDecoder(asset);
 	}
@@ -97,7 +133,7 @@ function clearPresetStyling(world: World, entity: Entity): void {
 		// A child with a Source is the file's (an authored stroke, say), not
 		// the preset's; only what a decoder made is cleared.
 		if (child.has(Source)) continue;
-		if (child.has(Paint) || child.has(Shadow) || child.has(TextRange)) {
+		if (child.has(Paint) || child.has(Shadow) || child.has(TextRange) || child.has(Stroke)) {
 			deleteEntity(world, child);
 		}
 	}

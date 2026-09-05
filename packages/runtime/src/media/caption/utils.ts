@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { store } from '../../world/store';
-import { ChildOf, TextRange, Cache, Chars } from '../../traits';
+import { ChildOf, TextRange, Cache, Chars, Computed } from '../../traits';
 import { deleteEntity } from '../../actions/entities';
 import { getAssetFile } from '../../actions/assets';
 import { parseSubtitles } from './subtitles';
@@ -60,10 +60,20 @@ export function groupBy(transcript: Transcript, options: GroupByOptions): WordGr
  * Find the active group index for a given time.
  * Returns -1 if no group is active.
  */
-export function findActiveGroup(groups: WordGroup[], relativeTime: number): number {
-	return groups.findIndex(group =>
-		relativeTime >= group[0]!.start && relativeTime <= (group.at(-1)?.end ?? 0)
-	);
+export function findActiveGroup(groups: WordGroup[], relativeTime: number, holdDuration = 0.35): number {
+	for (let i = 0; i < groups.length; i++) {
+		const group = groups[i]!;
+		const start = group[0]!.start;
+		const naturalEnd = group.at(-1)?.end ?? 0;
+		const nextStart = i < groups.length - 1 ? groups[i + 1]![0]!.start : Number.POSITIVE_INFINITY;
+		const endWithHold = Math.min(naturalEnd + holdDuration, nextStart);
+		const effectiveStart = i === 0 && start <= 0.6 ? 0 : start;
+
+		if (relativeTime >= effectiveStart && relativeTime <= endWithHold) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 /**
@@ -72,7 +82,11 @@ export function findActiveGroup(groups: WordGroup[], relativeTime: number): numb
  */
 export function setChars(world: World, entity: Entity, text: string) {
 	if (!entity.has(Chars)) entity.add(Chars);
-	store(world, Chars).value[entity.id()] = text;
+	const eid = entity.id();
+	store(world, Chars).value[eid] = text;
+	if (entity.has(Computed)) {
+		store(world, Computed).chars[eid] = text;
+	}
 }
 
 export function clearTextRanges(world: World, parent: Entity) {

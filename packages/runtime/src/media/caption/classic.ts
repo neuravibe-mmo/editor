@@ -21,8 +21,8 @@ export const CLASSIC_PRESET_HEIGHT = 100;
 // The preset's base TextStyle; the document writes it and authored style
 // props overwrite it (see CAPTION_PRESET_STYLES).
 export const CLASSIC_TEXT_STYLE = {
-	fontFamily: 'Urbanist',
-	fontWeight: '600',
+	fontFamily: 'Montserrat',
+	fontWeight: '700',
 	fontSize: 62,
 	textAlign: TextAlign.CENTER,
 	textBaseline: TextBaseline.MIDDLE,
@@ -37,13 +37,14 @@ export class ClassicCaptionDecoder implements CaptionDecoder {
 	public groups: ReturnType<typeof groupBy> = [];
 	public ready = false;
 	public styled = false;
+	public readonly initPromise: Promise<void>;
 
 	private readonly asset: Asset;
 	private currentGroupIndex = -1;
 
 	constructor(asset: Asset) {
 		this.asset = asset;
-		this.init();
+		this.initPromise = this.init();
 	}
 
 	private async init() {

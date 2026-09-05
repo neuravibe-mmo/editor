@@ -159,6 +159,12 @@ export enum CaptionType {
   PAPER,
   GUINEA,
   STARK,
+  HORMOZI,
+  KARAOKE,
+  ONE_WORD,
+  NEON,
+  COMIC,
+  CINEMATIC,
 }
 
 export enum CaptionAlign {

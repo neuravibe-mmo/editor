@@ -589,19 +589,13 @@ function extractMediaTiming(code: string): { start?: number; end?: number; sourc
     if (updatedCode.includes("<captions")) {
       updatedCode = updatedCode.replace(/<captions\b[\s\S]*?\/>/, `<captions
           src="${captionFileName}"
-          preset="spotlight"
-          fontSize={38}
-          fontFamily="Inter"
-          color="#FFFFFF"${timingProps}
+          preset="spotlight"${timingProps}
         />`);
     } else {
       const captionElement = `
         <captions
           src="${captionFileName}"
-          preset="spotlight"
-          fontSize={38}
-          fontFamily="Inter"
-          color="#FFFFFF"${timingProps}
+          preset="spotlight"${timingProps}
         />`;
       if (updatedCode.includes("</scene>")) {
         updatedCode = updatedCode.replace("</scene>", `${captionElement}\n      </scene>`);

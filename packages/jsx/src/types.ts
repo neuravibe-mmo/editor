@@ -154,7 +154,13 @@ export type CaptionPreset =
   | "whisper"
   | "paper"
   | "guinea"
-  | "stark";
+  | "stark"
+  | "hormozi"
+  | "karaoke"
+  | "oneWord"
+  | "neon"
+  | "comic"
+  | "cinematic";
 
 // ── Shared prop groups ──────────────────────────────────────────────────────
 //

@@ -62,7 +62,7 @@ export async function saveAssetAs(asset: Pick<Asset, 'handle' | 'mimeType' | 'pa
 
 	let target: FileSystemFileHandle;
 	try {
-		target = await window.showSaveFilePicker({
+		target = await (window as any).showSaveFilePicker({
 			suggestedName,
 			...(extension && asset.mimeType.includes('/')
 				? { types: [{ description: asset.mimeType, accept: { [asset.mimeType]: [extension] } as Record<`${string}/${string}`, `.${string}`[]> }] }
