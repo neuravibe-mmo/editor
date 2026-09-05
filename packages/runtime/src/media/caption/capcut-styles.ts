@@ -35,6 +35,11 @@ export interface CapCutGlowConfig {
 	blur: number;
 }
 
+export interface CapCutRainbowConfig {
+	palette: number[];
+	stickers?: boolean;
+}
+
 export interface CapCutPresetConfig {
 	id: string;
 	name: string;
@@ -59,6 +64,7 @@ export interface CapCutPresetConfig {
 	glow?: CapCutGlowConfig;
 	extrude3D?: CapCut3DExtrudeConfig;
 	background?: CapCutBackgroundConfig;
+	rainbowLetters?: CapCutRainbowConfig;
 }
 
 const BASE_MONTSERRAT_STYLE: CaptionPresetStyle = {
@@ -237,15 +243,22 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		shadow: { color: 0x9A3412, x: 3, y: 3, blur: 0 },
 	},
 
-	// 12. THE QUICK - Neon Rainbow Glow with Cyan/Blue energy
+	// 12. THE QUICK - Neon Rainbow Candy with Lightning Stickers
 	capcut_12: {
 		id: 'capcut_12',
-		name: 'Neon Cầu Vồng',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0x84CC16,
-		activeTextColor: 0x3B82F6,
-		stroke: { color: 0x1E3A8A, width: 3 },
-		glow: { color: '#3B82F6', blur: 20 },
+		name: 'Kẹo Cầu Vồng & Sấm Sét',
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontStyle: FontStyle.ITALIC,
+			fontWeight: '900',
+			fontSize: 66,
+		},
+		textColor: 0xFFFFFF,
+		activeTextColor: 0xFFD000,
+		rainbowLetters: {
+			palette: [0xFFB800, 0x22C55E, 0x06B6D4, 0xEC4899, 0xF97316],
+			stickers: true,
+		},
 	},
 
 	// 13. Fox Jumps Over - Script/Cursive font with Pink/Cyan neon

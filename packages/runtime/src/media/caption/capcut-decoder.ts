@@ -97,6 +97,36 @@ function drawRoundedBox(
 	ctx.restore();
 }
 
+function drawLightningBolt(
+	ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+	x: number,
+	y: number,
+	size: number,
+	rotation = 0,
+): void {
+	ctx.save();
+	ctx.translate(x, y);
+	if (rotation !== 0) ctx.rotate(rotation);
+
+	ctx.beginPath();
+	ctx.moveTo(size * 0.15, -size * 0.6);
+	ctx.lineTo(-size * 0.45, -size * 0.05);
+	ctx.lineTo(-size * 0.05, -size * 0.05);
+	ctx.lineTo(-size * 0.35, size * 0.6);
+	ctx.lineTo(size * 0.45, size * 0.05);
+	ctx.lineTo(size * 0.05, size * 0.05);
+	ctx.closePath();
+
+	ctx.fillStyle = '#FFE500';
+	ctx.strokeStyle = '#000000';
+	ctx.lineWidth = 2.5;
+	ctx.lineJoin = 'round';
+	ctx.stroke();
+	ctx.fill();
+
+	ctx.restore();
+}
+
 export class CapCutCaptionDecoder implements CaptionDecoder {
 	public readonly type: CaptionType;
 	public groups: ReturnType<typeof groupBy> = [];
@@ -448,8 +478,56 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.restore();
 		}
 
-		// 5. Final render: Text fills and inner strokes
-		renderTokens(ctx, world, entity);
+		// 5. Final render: Rainbow Candy Letters & Stickers OR Standard Text Tokens
+		if (this.config.rainbowLetters) {
+			const palette = this.config.rainbowLetters.palette.map(c => colorToHex(c));
+			const fontSize = this.config.style.fontSize ?? 58;
+
+			ctx.save();
+			ctx.textAlign = 'start';
+			ctx.textBaseline = 'top';
+
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
+				applyFont(ctx, world, entity, word.ranges);
+
+				// Kinetic lightning stickers around active word
+				if (this.config.rainbowLetters.stickers && (wIdx === this.currentWordIndex || words.length === 1)) {
+					const boltSize = Math.max(fontSize * 0.38, 22);
+					drawLightningBolt(ctx, word.x - boltSize * 0.7, word.y - boltSize * 0.2, boltSize, -0.25);
+					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.7, word.y - boltSize * 0.2, boltSize, 0.25);
+					drawLightningBolt(ctx, word.x - boltSize * 0.5, word.y + fontSize * 0.85, boltSize * 0.85, -0.35);
+					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.5, word.y + fontSize * 0.85, boltSize * 0.85, 0.35);
+				}
+
+				// Draw each character with cyclic rainbow candy gradient and outline
+				for (let i = 0; i < word.chars.length; i++) {
+					const char = word.chars[i]!;
+					const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
+					const charX = word.x + charAdvance;
+					const color = palette[i % palette.length]!;
+
+					// Black outline
+					ctx.strokeStyle = '#000000';
+					ctx.lineWidth = 5;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(char, charX, word.y);
+
+					// Glossy candy fill
+					const grad = ctx.createLinearGradient(charX, word.y, charX, word.y + fontSize);
+					grad.addColorStop(0, '#FFFFFF');
+					grad.addColorStop(0.25, color);
+					grad.addColorStop(1, color);
+
+					ctx.fillStyle = grad;
+					ctx.fillText(char, charX, word.y);
+				}
+			}
+			ctx.restore();
+		} else {
+			renderTokens(ctx, world, entity);
+		}
 	}
 
 	public dispose(): void {
