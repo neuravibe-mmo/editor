@@ -160,7 +160,8 @@ export type CaptionPreset =
   | "oneWord"
   | "neon"
   | "comic"
-  | "cinematic";
+  | "cinematic"
+  | `capcut_${string}`;
 
 // ── Shared prop groups ──────────────────────────────────────────────────────
 //

@@ -85,7 +85,7 @@ export function renderClip(
 	{
 		let label = entity.get(Name)?.value ?? '';
 
-		if (isCaption(entity)) label = label || `${CAPTION_PRESETS[entity.get(Caption)?.type ?? CaptionType.CLASSIC]} Captions`;
+		if (isCaption(entity)) label = label || `${CAPTION_PRESETS[entity.get(Caption)?.type ?? CaptionType.CLASSIC] ?? 'CapCut'} Captions`;
 		else if (isText(entity)) label = entity.get(Chars)?.value ?? label ?? '';
 		if (!label) label = getClipFallbackName(world, entity);
 		if (generating) label = 'Generating...';
@@ -269,7 +269,7 @@ function handleBody(
 }
 
 
-const CAPTION_PRESETS: Record<CaptionType, string> = {
+const CAPTION_PRESETS: Partial<Record<CaptionType, string>> = {
 	[CaptionType.CLASSIC]: 'Classic',
 	[CaptionType.CASCADE]: 'Cascade',
 	[CaptionType.SPOTLIGHT]: 'Spotlight',

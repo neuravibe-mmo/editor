@@ -7,14 +7,6 @@ import { ControlRow } from "@/components/ui/control-group";
 import { Icon } from "@/components/ui/icon";
 import { PanelSection } from "@/components/ui/panel-section";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectPortal,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   FloatingInspector,
   FloatingInspectorContent,
   FloatingInspectorHeader,
@@ -28,11 +20,10 @@ import { useTrait } from "@diffusionstudio/koota-solid";
 import { Caption, colorToHex } from "@diffusionstudio/runtime";
 import { useEditor } from "@/engine/hooks";
 import {
-  CAPTION_PRESET_OPTIONS,
   DEFAULT_CAPTION_PRESET,
   captionPresetOption,
 } from "./caption-types";
-
+import { CaptionPresetsGrid } from "./caption-presets-grid";
 import { useLayout } from "@/context/layout";
 
 import type { CaptionPresetOption } from "./caption-types";
@@ -103,32 +94,16 @@ export function CaptionSettings(props: CaptionSettingsProps) {
         </Button>
       </div>
 
-      <ControlRow label="Preset">
-        <Select<CaptionPresetOption>
-          value={preset()}
-          onChange={handlePresetChange}
-          options={CAPTION_PRESET_OPTIONS}
-          optionValue="name"
-          optionTextValue="label"
-          itemComponent={(itemProps) => (
-            <SelectItem item={itemProps.item}>
-              {itemProps.item.rawValue.label}
-            </SelectItem>
-          )}
-        >
-          <SelectTrigger class="pl-1 gap-2">
-            <div class="text-foreground size-5 rounded-sm flex items-center justify-center bg-primary overflow-clip shrink-0">
-              <Icon name="captions" class="text-foreground" />
-            </div>
-            <SelectValue<CaptionPresetOption> class="text-xs">
-              {(state) => state.selectedOption()?.label}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPortal>
-            <SelectContent />
-          </SelectPortal>
-        </Select>
-      </ControlRow>
+      <div class="px-2 pb-2">
+        <div class="text-[11px] font-medium text-muted-foreground mb-1.5 flex items-center justify-between">
+          <span>Kiểu phụ đề (Presets)</span>
+          <span class="text-[10px] text-primary/80 font-normal">{preset().label}</span>
+        </div>
+        <CaptionPresetsGrid
+          activePreset={preset()}
+          onSelect={handlePresetChange}
+        />
+      </div>
 
       <For each={slots()}>
         {(slot, index) => (

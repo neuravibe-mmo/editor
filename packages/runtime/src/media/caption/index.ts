@@ -62,7 +62,49 @@ export const CAPTION_PRESET_STYLES: Record<CaptionType, CaptionPresetStyle> = {
 	[CaptionType.NEON]: NEON_TEXT_STYLE,
 	[CaptionType.COMIC]: COMIC_TEXT_STYLE,
 	[CaptionType.CINEMATIC]: CINEMATIC_TEXT_STYLE,
-};
+} as Record<CaptionType, CaptionPresetStyle>;
+
+const CAPCUT_STYLES_MAP: CaptionPresetStyle[] = [
+	HORMOZI_TEXT_STYLE, CLASSIC_TEXT_STYLE, PAPER_TEXT_STYLE, COMIC_TEXT_STYLE, COMIC_TEXT_STYLE,
+	COMIC_TEXT_STYLE, HORMOZI_TEXT_STYLE, COMIC_TEXT_STYLE, PAPER_TEXT_STYLE, NEON_TEXT_STYLE,
+	PAPER_TEXT_STYLE, HORMOZI_TEXT_STYLE, KARAOKE_TEXT_STYLE, PAPER_TEXT_STYLE, HORMOZI_TEXT_STYLE,
+	COMIC_TEXT_STYLE, NEON_TEXT_STYLE, CLASSIC_TEXT_STYLE, SPOTLIGHT_TEXT_STYLE, PAPER_TEXT_STYLE,
+	NEON_TEXT_STYLE, COMIC_TEXT_STYLE, CLASSIC_TEXT_STYLE, HORMOZI_TEXT_STYLE, COMIC_TEXT_STYLE,
+	COMIC_TEXT_STYLE, CLASSIC_TEXT_STYLE, KARAOKE_TEXT_STYLE, PAPER_TEXT_STYLE, COMIC_TEXT_STYLE,
+	CLASSIC_TEXT_STYLE, NEON_TEXT_STYLE, COMIC_TEXT_STYLE, COMIC_TEXT_STYLE, PAPER_TEXT_STYLE,
+	NEON_TEXT_STYLE, CLASSIC_TEXT_STYLE, COMIC_TEXT_STYLE, PAPER_TEXT_STYLE, HORMOZI_TEXT_STYLE,
+	NEON_TEXT_STYLE, COMIC_TEXT_STYLE, CLASSIC_TEXT_STYLE, PAPER_TEXT_STYLE, COMIC_TEXT_STYLE,
+];
+
+const CAPCUT_FILLS_MAP: (number | undefined)[] = [
+	0xFFFFFF, 0xFFFFFF, 0xFFFFFF, COMIC_BASE_COLOR, 0xFFFFFF,
+	0xFFE500, 0xFFA500, 0xFF3366, 0xFFFFFF, 0xFFFFFF,
+	0xFFFFFF, 0xFFD700, KARAOKE_BASE_COLOR, 0x000000, 0xCCFF00,
+	0xFF7700, 0xE0B0FF, 0xCC2222, 0x00D4FF, 0xFFFFFF,
+	0xFF69B4, 0xFF5500, 0xFFFFFF, 0x00FF88, 0xFFFFFF,
+	0xFFEE00, 0xE5C158, 0x00E5FF, 0xFFFFFF, 0xFFFF00,
+	0xDDDDDD, 0xFF00AA, 0xFFFFFF, 0xFF2222, 0x000000,
+	0x00FFFF, 0xFFFFFF, 0xEEEEEE, 0xFFFFFF, 0xE07A5F,
+	0xBF55EC, 0xFFD700, 0x990000, 0xFFD700, 0x00BBFF,
+];
+
+const CAPCUT_DECODERS_MAP: (new (asset: Asset) => CaptionDecoder)[] = [
+	HormoziCaptionDecoder, ClassicCaptionDecoder, PaperCaptionDecoder, ComicCaptionDecoder, ComicCaptionDecoder,
+	ComicCaptionDecoder, HormoziCaptionDecoder, ComicCaptionDecoder, PaperCaptionDecoder, NeonCaptionDecoder,
+	PaperCaptionDecoder, HormoziCaptionDecoder, KaraokeCaptionDecoder, PaperCaptionDecoder, HormoziCaptionDecoder,
+	ComicCaptionDecoder, NeonCaptionDecoder, ClassicCaptionDecoder, SpotlightCaptionDecoder, PaperCaptionDecoder,
+	NeonCaptionDecoder, ComicCaptionDecoder, ClassicCaptionDecoder, HormoziCaptionDecoder, ComicCaptionDecoder,
+	ComicCaptionDecoder, ClassicCaptionDecoder, KaraokeCaptionDecoder, PaperCaptionDecoder, ComicCaptionDecoder,
+	ClassicCaptionDecoder, NeonCaptionDecoder, ComicCaptionDecoder, ComicCaptionDecoder, PaperCaptionDecoder,
+	NeonCaptionDecoder, ClassicCaptionDecoder, ComicCaptionDecoder, PaperCaptionDecoder, HormoziCaptionDecoder,
+	NeonCaptionDecoder, ComicCaptionDecoder, ClassicCaptionDecoder, PaperCaptionDecoder, ComicCaptionDecoder,
+];
+
+// Populate 45 CapCut presets into styles and fills
+for (let i = CaptionType.CAPCUT_01; i <= CaptionType.CAPCUT_45; i++) {
+	const offset = i - CaptionType.CAPCUT_01;
+	CAPTION_PRESET_STYLES[i] = CAPCUT_STYLES_MAP[offset] ?? CLASSIC_TEXT_STYLE;
+}
 
 /**
  * Each preset's intrinsic base fill: the Color the document seeds the
@@ -85,9 +127,22 @@ export const CAPTION_PRESET_FILLS: Record<CaptionType, number | undefined> = {
 	[CaptionType.NEON]: 0xFFFFFF,
 	[CaptionType.COMIC]: COMIC_BASE_COLOR,
 	[CaptionType.CINEMATIC]: 0xFFFFFF,
-};
+} as Record<CaptionType, number | undefined>;
+
+for (let i = CaptionType.CAPCUT_01; i <= CaptionType.CAPCUT_45; i++) {
+	const offset = i - CaptionType.CAPCUT_01;
+	CAPTION_PRESET_FILLS[i] = CAPCUT_FILLS_MAP[offset];
+}
 
 function createCaptionDecoder(type: CaptionType, asset: Asset): CaptionDecoder {
+	if (type >= CaptionType.CAPCUT_01 && type <= CaptionType.CAPCUT_45) {
+		const offset = type - CaptionType.CAPCUT_01;
+		const DecoderClass = CAPCUT_DECODERS_MAP[offset] ?? ClassicCaptionDecoder;
+		const decoder = new DecoderClass(asset);
+		Object.defineProperty(decoder, 'type', { value: type, writable: false });
+		return decoder;
+	}
+
 	switch (type) {
 		case CaptionType.CLASSIC:
 			return new ClassicCaptionDecoder(asset);
