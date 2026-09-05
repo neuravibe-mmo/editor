@@ -125,6 +125,10 @@ export function getAssetFile(asset: Pick<Asset, 'handle'>): Promise<File> {
 	return promise;
 }
 
+export function invalidateAssetFile(asset: Pick<Asset, 'handle'>): void {
+	assetFileCache.delete(asset.handle);
+}
+
 /** Returns the File/Blob backing an asset, or null if the asset is missing. */
 export async function getAssetBlob(world: World, id: string): Promise<Blob | null> {
 	const asset = getAsset(world, id);

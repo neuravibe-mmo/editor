@@ -33,6 +33,8 @@ import {
   captionPresetOption,
 } from "./caption-types";
 
+import { useLayout } from "@/context/layout";
+
 import type { CaptionPresetOption } from "./caption-types";
 import type { Entity } from "koota";
 
@@ -50,6 +52,7 @@ type CaptionSettingsProps = {
  */
 export function CaptionSettings(props: CaptionSettingsProps) {
   const editor = useEditor();
+  const { setLeftSidebarTab } = useLayout();
   const entity = () => props.selection[0]!;
 
   let anchorRef!: HTMLDivElement;
@@ -88,6 +91,18 @@ export function CaptionSettings(props: CaptionSettingsProps) {
 
   return (
     <PanelSection title="Caption" ref={anchorRef}>
+      <div class="px-2 pb-2.5 pt-0.5">
+        <Button
+          variant="secondary"
+          size="small"
+          class="w-full flex items-center justify-center gap-1.5 text-xs h-7 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20"
+          onClick={() => setLeftSidebarTab("captions")}
+        >
+          <Icon name="captions" class="size-3.5 text-primary" />
+          <span>Chỉnh sửa phụ đề</span>
+        </Button>
+      </div>
+
       <ControlRow label="Preset">
         <Select<CaptionPresetOption>
           value={preset()}

@@ -13,12 +13,57 @@ import { ProjectMenu } from "./project-menu";
 import { useProject } from "@/context/project";
 import { cx } from "@/lib/cva";
 
+import { CaptionEditor } from "@/components/caption-editor";
+
 export function SidebarLeft() {
+  const { leftSidebarTab, setLeftSidebarTab } = useLayout();
+
   return (
-    <div class="flex flex-col h-full overflow-hidden">
+    <div class="flex flex-col h-full overflow-hidden bg-sidebar">
       <ElectronHeader />
       <ProjectHeader />
-      <Assets />
+
+      {/* Tabs: Tệp & Phụ đề */}
+      <div class="h-9 px-2.5 border-b border-border bg-sidebar shrink-0 flex items-center gap-1">
+        <button
+          type="button"
+          class="flex-1 h-6.5 px-2 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+          classList={{
+            "bg-background text-foreground shadow-xs border border-border-strong":
+              leftSidebarTab() === "assets",
+            "text-muted-foreground hover:text-foreground hover:bg-muted/30":
+              leftSidebarTab() !== "assets",
+          }}
+          onClick={() => setLeftSidebarTab("assets")}
+        >
+          <Icon name="assets" class="size-3.5" />
+          <span>Tệp</span>
+        </button>
+
+        <button
+          type="button"
+          class="flex-1 h-6.5 px-2 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+          classList={{
+            "bg-background text-foreground shadow-xs border border-border-strong":
+              leftSidebarTab() === "captions",
+            "text-muted-foreground hover:text-foreground hover:bg-muted/30":
+              leftSidebarTab() !== "captions",
+          }}
+          onClick={() => setLeftSidebarTab("captions")}
+        >
+          <Icon name="captions" class="size-3.5" />
+          <span>Phụ đề</span>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-hidden">
+        <Show when={leftSidebarTab() === "assets"}>
+          <Assets />
+        </Show>
+        <Show when={leftSidebarTab() === "captions"}>
+          <CaptionEditor />
+        </Show>
+      </div>
     </div>
   );
 }

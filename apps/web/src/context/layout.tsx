@@ -14,6 +14,8 @@ type LayoutContextValue = {
   setTimelineHeight(height: number): void;
   rightSidebarWidth: Accessor<number>;
   setRightSidebarWidth(width: number): void;
+  leftSidebarTab: Accessor<'assets' | 'captions'>;
+  setLeftSidebarTab(tab: 'assets' | 'captions'): void;
   toggleUI(): void;
   toggleTimeline(): void;
 };
@@ -30,6 +32,10 @@ export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 320;
 export function LayoutProvider(props: { children: JSX.Element }) {
   const [uiVisible, setUiVisible] = createStoredSignal(
     store.define<boolean>('layout.uiVisible', true),
+  );
+
+  const [leftSidebarTab, setLeftSidebarTab] = createStoredSignal(
+    store.define<'assets' | 'captions'>('layout.leftSidebarTab_v3', 'captions'),
   );
 
   const [timelineHeight, setTimelineHeight] = createStoredSignal(
@@ -55,6 +61,8 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         setTimelineHeight,
         rightSidebarWidth,
         setRightSidebarWidth,
+        leftSidebarTab,
+        setLeftSidebarTab,
         toggleUI,
         toggleTimeline,
       }}>

@@ -4,7 +4,7 @@
 
 import { CaptionType } from '../../constants';
 import { AssetId, Caption, ChildOf, Paint, Shadow, Source, Stroke, TextRange, CaptionDecoderHandle } from '../../traits';
-import { getAsset } from '../../actions/assets';
+import { getAsset, invalidateAssetFile } from '../../actions/assets';
 import { deleteEntity } from '../../actions/entities';
 import { ClassicCaptionDecoder, CLASSIC_TEXT_STYLE } from './classic';
 import { CascadeCaptionDecoder, CASCADE_TEXT_STYLE } from './cascade';
@@ -172,4 +172,16 @@ export function resolveCaptionDecoder(world: World, entity: Entity): CaptionDeco
 	decoder.styled = decoder.applyStyles(world, entity);
 
 	return decoder;
+}
+
+export function invalidateCaptionDecoder(world: World, entity: Entity): void {
+	const existing = entity.get(CaptionDecoderHandle);
+	existing?.dispose();
+	entity.remove(CaptionDecoderHandle);
+	clearPresetStyling(world, entity);
+	const assetId = entity.get(AssetId)?.value;
+	if (assetId) {
+		const asset = getAsset(world, assetId);
+		if (asset) invalidateAssetFile(asset);
+	}
 }
