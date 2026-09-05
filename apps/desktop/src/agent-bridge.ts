@@ -229,7 +229,19 @@ async function processVideoEditPrompt(
     }
   }
 
-  // 2. Audio / Background Music / Soundtracks ("tìm nhạc background", "thêm nhạc", "nhạc nền", "music", "audio")
+  // 2. Audio Cut / Delete / Mute ("xóa nhạc", "cắt nhạc nền từ giây thứ 9", "bỏ nhạc", "tắt âm thanh")
+  const isCutOrDelete =
+    norm.includes("xoa") ||
+    norm.includes("cat") ||
+    norm.includes("bo") ||
+    norm.includes("tat") ||
+    norm.includes("mute") ||
+    norm.includes("giam") ||
+    norm.includes("remove") ||
+    norm.includes("delete") ||
+    norm.includes("trim") ||
+    norm.includes("cut");
+
   const isAudioMusic =
     norm.includes("nhac") ||
     norm.includes("music") ||
@@ -241,7 +253,77 @@ async function processVideoEditPrompt(
     norm.includes("beat") ||
     norm.includes("soundtrack");
 
-  if (isAudioMusic) {
+  // Handle DELETE / TRIM AUDIO first
+  if (isAudioMusic && isCutOrDelete) {
+    const numbers = (prompt.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+    let updatedCode = currentCode;
+
+    if (numbers.length > 0) {
+      const cutTime = numbers[0];
+
+      // "xoa nhac tu giay thu 9 di" / "tu giay 9" / "sau giay 9" / "tu 9s" -> keep 0 to cutTime
+      if (
+        norm.includes("tu giay") ||
+        norm.includes("sau") ||
+        norm.includes("tu") ||
+        norm.includes("di") ||
+        norm.includes("tro di") ||
+        norm.includes("den cuoi") ||
+        norm.includes("cuoi")
+      ) {
+        if (updatedCode.includes("<audio")) {
+          if (updatedCode.includes("end={")) {
+            updatedCode = updatedCode.replace(/(<audio[^>]*?)end=\{[^}]+\}/, `$1end={${cutTime}}`);
+          } else {
+            updatedCode = updatedCode.replace(/<audio\b/, `<audio end={${cutTime}}`);
+          }
+
+          return {
+            explanation: `✂️ **Đã cắt nhạc nền từ giây thứ ${cutTime}!**\n- 🎵 **Thời lượng nhạc**: Giữ lại phát từ **0s** đến **${cutTime}s** (dừng lại tại mốc ${cutTime} giây theo yêu cầu).\n- ⚡ **Timeline**: Đã tự động cập nhật lại track nhạc nền trên giao diện.`,
+            newCode: updatedCode,
+          };
+        } else {
+          return {
+            explanation: `ℹ️ **Không tìm thấy track nhạc nền (\`<audio>\`) nào trong timeline để cắt.**\nBạn có thể thêm nhạc nền trước bằng cách gõ: *"Thêm nhạc nền phù hợp"*.`,
+            newCode: currentCode,
+          };
+        }
+      } else if (norm.includes("dau")) {
+        // "xoa 9s dau cua nhac" -> start at cutTime
+        if (updatedCode.includes("<audio")) {
+          if (updatedCode.includes("start={")) {
+            updatedCode = updatedCode.replace(/(<audio[^>]*?)start=\{[^}]+\}/, `$1start={${cutTime}}`);
+          } else {
+            updatedCode = updatedCode.replace(/<audio\b/, `<audio start={${cutTime}}`);
+          }
+
+          return {
+            explanation: `✂️ **Đã xóa ${cutTime} giây đầu của nhạc nền!**\n- 🎵 Nhạc nền sẽ bắt đầu phát từ mốc **${cutTime}s** trở đi.`,
+            newCode: updatedCode,
+          };
+        }
+      }
+    }
+
+    // Completely remove background music if no specific time or general "xoa nhac"
+    if (updatedCode.includes("<audio") || updatedCode.includes("bgMusic")) {
+      updatedCode = updatedCode.replace(/<audio\b[\s\S]*?\/>\s*/g, "");
+      updatedCode = updatedCode.replace(/const\s+bgMusic\s*=\s*generate\.audio\([\s\S]*?\);\n*/g, "");
+
+      return {
+        explanation: `🗑️ **Đã xóa toàn bộ nhạc nền khỏi timeline!**\n- Đã loại bỏ track \`<audio>\` và mã khởi tạo nhạc nền khỏi dự án.`,
+        newCode: updatedCode,
+      };
+    } else {
+      return {
+        explanation: `ℹ️ **Timeline hiện tại chưa có track nhạc nền nào để xóa.**`,
+        newCode: currentCode,
+      };
+    }
+  }
+
+  // 3. Audio / Background Music / Soundtracks ("tìm nhạc background", "thêm nhạc", "nhạc nền", "music", "audio")
+  if (isAudioMusic && !isCutOrDelete) {
     let musicStyle = "Upbeat cheerful modern acoustic guitar background music, lively rhythm, perfect for lifestyle vlog";
     let styleDescription = "Acoustic Vui Tươi & Năng Động";
 
@@ -401,19 +483,22 @@ async function processVideoEditPrompt(
       endSec = Math.round(currentTime * 100) / 100;
     }
 
-    if (endSec !== null && currentCode.includes("<video")) {
+    const hasVideoElement = currentCode.includes("<video") || currentCode.includes("<videoPaint");
+    if (endSec !== null && hasVideoElement) {
       let updatedCode = currentCode;
+
+      const tagRegex = currentCode.includes("<video") ? /<video\b/ : /<rect\b/;
 
       if (updatedCode.includes("start={")) {
         updatedCode = updatedCode.replace(/start=\{[^}]+\}/, `start={${startSec}}`);
       } else {
-        updatedCode = updatedCode.replace(/<video\b/, `<video start={${startSec}}`);
+        updatedCode = updatedCode.replace(tagRegex, (match) => `${match} start={${startSec}}`);
       }
 
       if (updatedCode.includes("end={")) {
         updatedCode = updatedCode.replace(/end=\{[^}]+\}/, `end={${endSec}}`);
       } else {
-        updatedCode = updatedCode.replace(/<video\b/, `<video end={${endSec}}`);
+        updatedCode = updatedCode.replace(tagRegex, (match) => `${match} end={${endSec}}`);
       }
 
       return {
