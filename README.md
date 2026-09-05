@@ -240,8 +240,19 @@ npm install
 
 cp apps/web/.env.example apps/web/.env   # required: the app won't run without it
 
+# Run desktop app (Electron + Web dev server)
 npm run dev
+
+# Or run web app only (http://localhost:5173)
+npm run dev:web_v1
 ```
+
+### Development scripts
+
+- `npm run dev` (or `npm run dev:desktop`): Start Desktop app (Electron + Vite)
+- `npm run dev:web_v1`: Start Web app only
+- `npm run build`: Build Web app
+- `npm run build:desktop`: Build Desktop app
 
 To put `dapi` on your PATH (macOS/Homebrew layout; adjust the link target for other setups), link it once:
 
