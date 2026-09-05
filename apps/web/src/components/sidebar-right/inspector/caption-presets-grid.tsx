@@ -6,6 +6,7 @@ import { createSignal, For, Show, createMemo } from "solid-js";
 import { cx } from "@/lib/cva";
 import {
   CAPCUT_PRESET_OPTIONS,
+  CUSTOM_PRESET_OPTIONS,
   DEFAULT_CAPTION_PRESET,
   type CaptionPresetOption,
 } from "./caption-types";
@@ -16,13 +17,15 @@ type CaptionPresetsGridProps = {
 };
 
 export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
-  const [filter, setFilter] = createSignal<"all" | "free" | "pro">("all");
+  const [filter, setFilter] = createSignal<"all" | "custom" | "capcut" | "pro">("all");
 
   const filteredPresets = createMemo(() => {
-    const list = CAPCUT_PRESET_OPTIONS;
-    if (filter() === "pro") return list.filter((p) => p.isPro);
-    if (filter() === "free") return list.filter((p) => !p.isPro);
-    return list;
+    const custom = CUSTOM_PRESET_OPTIONS;
+    const capcut = CAPCUT_PRESET_OPTIONS;
+    if (filter() === "custom") return custom;
+    if (filter() === "capcut") return capcut;
+    if (filter() === "pro") return capcut.filter((p) => p.isPro);
+    return [...custom, ...capcut];
   });
 
   const isResetActive = () =>
@@ -31,35 +34,47 @@ export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
   return (
     <div class="flex flex-col gap-2 w-full select-none">
       {/* Filter Tabs */}
-      <div class="flex items-center gap-1 px-1 bg-muted/20 p-1 rounded-lg border border-border/40 text-[11px]">
+      <div class="flex items-center gap-1 px-1 bg-muted/20 p-1 rounded-lg border border-border/40 text-[11px] overflow-x-auto scrollbar-none">
         <button
           type="button"
           class={cx(
-            "flex-1 py-1 rounded-md font-medium transition-colors text-center cursor-pointer",
+            "px-2 py-1 rounded-md font-medium transition-colors text-center cursor-pointer whitespace-nowrap",
             filter() === "all"
               ? "bg-background text-foreground shadow-xs border border-border-strong"
               : "text-muted-foreground hover:text-foreground"
           )}
           onClick={() => setFilter("all")}
         >
-          Tất cả (45)
+          Tất cả ({CUSTOM_PRESET_OPTIONS.length + CAPCUT_PRESET_OPTIONS.length})
         </button>
         <button
           type="button"
           class={cx(
-            "flex-1 py-1 rounded-md font-medium transition-colors text-center cursor-pointer",
-            filter() === "free"
+            "px-2 py-1 rounded-md font-medium transition-colors text-center cursor-pointer whitespace-nowrap",
+            filter() === "custom"
+              ? "bg-primary/20 text-primary shadow-xs border border-primary/40 font-semibold"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => setFilter("custom")}
+        >
+          Preset của bạn ({CUSTOM_PRESET_OPTIONS.length})
+        </button>
+        <button
+          type="button"
+          class={cx(
+            "px-2 py-1 rounded-md font-medium transition-colors text-center cursor-pointer whitespace-nowrap",
+            filter() === "capcut"
               ? "bg-background text-foreground shadow-xs border border-border-strong"
               : "text-muted-foreground hover:text-foreground"
           )}
-          onClick={() => setFilter("free")}
+          onClick={() => setFilter("capcut")}
         >
-          Miễn phí
+          CapCut (45)
         </button>
         <button
           type="button"
           class={cx(
-            "flex-1 py-1 rounded-md font-medium transition-colors text-center flex items-center justify-center gap-1 cursor-pointer",
+            "px-2 py-1 rounded-md font-medium transition-colors text-center flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
             filter() === "pro"
               ? "bg-purple-950/40 text-purple-300 shadow-xs border border-purple-500/40"
               : "text-muted-foreground hover:text-purple-300"
@@ -149,6 +164,13 @@ export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
                 <Show when={preset.isPro}>
                   <div class="absolute top-1 left-1 px-1 py-0.5 rounded-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-[8px] font-extrabold text-white leading-none shadow-xs uppercase tracking-tighter flex items-center gap-0.5">
                     <span>PRO</span>
+                  </div>
+                </Show>
+
+                {/* Custom Preset Badge */}
+                <Show when={preset.category === "custom"}>
+                  <div class="absolute top-1 left-1 px-1 py-0.5 rounded-sm bg-primary text-[8px] font-bold text-primary-foreground leading-none shadow-xs uppercase tracking-tighter">
+                    <span>GỐC</span>
                   </div>
                 </Show>
 

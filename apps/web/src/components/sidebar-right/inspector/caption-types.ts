@@ -16,8 +16,104 @@ export type CaptionPresetOption = {
   label: string;
   thumbnail?: string;
   isPro?: boolean;
+  category?: "custom" | "capcut";
   slots: CaptionColorSlot[];
 };
+
+/** 12 custom & original presets */
+export const CUSTOM_PRESET_OPTIONS: CaptionPresetOption[] = [
+  {
+    name: "hormozi",
+    label: "Hormozi (MrBeast)",
+    thumbnail: "/presets/captions/preset_01.webp",
+    category: "custom",
+    slots: [{ label: "Highlight", defaultColor: 0xFFE500 }],
+  },
+  {
+    name: "comic",
+    label: "Comic Pop",
+    thumbnail: "/presets/captions/preset_04.webp",
+    category: "custom",
+    slots: [{ label: "Active Word", defaultColor: 0xFFFFFF }],
+  },
+  {
+    name: "karaoke",
+    label: "Karaoke",
+    thumbnail: "/presets/captions/preset_13.webp",
+    category: "custom",
+    slots: [{ label: "Highlight", defaultColor: 0x24D5FF }],
+  },
+  {
+    name: "neon",
+    label: "Neon Glow",
+    thumbnail: "/presets/captions/preset_10.webp",
+    category: "custom",
+    slots: [
+      { label: "Glow", defaultColor: 0x00F0FF },
+      { label: "Active Word", defaultColor: 0xFF007F },
+    ],
+  },
+  {
+    name: "spotlight",
+    label: "Spotlight",
+    thumbnail: "/presets/captions/preset_19.webp",
+    category: "custom",
+    slots: [{ label: "Highlight", defaultColor: 0x24D5FF }],
+  },
+  {
+    name: "oneWord",
+    label: "One Word",
+    thumbnail: "/presets/captions/preset_02.webp",
+    category: "custom",
+    slots: [],
+  },
+  {
+    name: "cinematic",
+    label: "Cinematic",
+    thumbnail: "/presets/captions/preset_32.webp",
+    category: "custom",
+    slots: [],
+  },
+  {
+    name: "cascade",
+    label: "Cascade",
+    thumbnail: "/presets/captions/preset_17.webp",
+    category: "custom",
+    slots: [],
+  },
+  {
+    name: "whisper",
+    label: "Whisper",
+    thumbnail: "/presets/captions/preset_28.webp",
+    category: "custom",
+    slots: [],
+  },
+  {
+    name: "paper",
+    label: "Paper",
+    thumbnail: "/presets/captions/preset_03.webp",
+    category: "custom",
+    slots: [],
+  },
+  {
+    name: "guinea",
+    label: "Guinea",
+    thumbnail: "/presets/captions/preset_07.webp",
+    category: "custom",
+    slots: [
+      { label: "Color 1", defaultColor: 0xF55353 },
+      { label: "Color 2", defaultColor: 0xFEB139 },
+      { label: "Color 3", defaultColor: 0xF6F54D },
+    ],
+  },
+  {
+    name: "stark",
+    label: "Stark",
+    thumbnail: "/presets/captions/preset_06.webp",
+    category: "custom",
+    slots: [],
+  },
+];
 
 /** 45 CapCut presets catalogue */
 export const CAPCUT_PRESET_OPTIONS: CaptionPresetOption[] = [
@@ -338,22 +434,11 @@ export const CAPCUT_PRESET_OPTIONS: CaptionPresetOption[] = [
   },
 ];
 
-/** The presets, combining classic presets and 45 CapCut presets */
+/** The presets, combining default classic, custom/original presets, and 45 CapCut presets */
 export const CAPTION_PRESET_OPTIONS: CaptionPresetOption[] = [
   { name: "classic", label: "Mặc định (Classic)", slots: [] },
+  ...CUSTOM_PRESET_OPTIONS,
   ...CAPCUT_PRESET_OPTIONS,
-  { name: "hormozi", label: "Hormozi (MrBeast)", slots: [{ label: "Highlight", defaultColor: 0xFFE500 }] },
-  { name: "comic", label: "Comic Pop", slots: [{ label: "Active Word", defaultColor: 0xFFFFFF }] },
-  { name: "karaoke", label: "Karaoke", slots: [{ label: "Highlight", defaultColor: 0x24D5FF }] },
-  { name: "neon", label: "Neon Glow", slots: [{ label: "Glow", defaultColor: 0x00F0FF }, { label: "Active Word", defaultColor: 0xFF007F }] },
-  { name: "spotlight", label: "Spotlight", slots: [{ label: "Highlight", defaultColor: 0x24D5FF }] },
-  { name: "oneWord", label: "One Word", slots: [] },
-  { name: "cinematic", label: "Cinematic", slots: [] },
-  { name: "cascade", label: "Cascade", slots: [] },
-  { name: "whisper", label: "Whisper", slots: [] },
-  { name: "paper", label: "Paper", slots: [] },
-  { name: "guinea", label: "Guinea", slots: [{ label: "Color 1", defaultColor: 0xF55353 }, { label: "Color 2", defaultColor: 0xFEB139 }, { label: "Color 3", defaultColor: 0xF6F54D }] },
-  { name: "stark", label: "Stark", slots: [] },
 ];
 
 /** The preset a caption with no `preset` of its own plays. */
