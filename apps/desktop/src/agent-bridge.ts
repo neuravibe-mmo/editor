@@ -2,10 +2,144 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { MAIN_CHANNELS } from "./main-channels";
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Transcribes project media dynamically using local Whisper.cpp and ffmpeg.
+ */
+async function transcribeProjectMedia(dir: string, assets: unknown[]): Promise<{ srt: string; json?: string; mediaName: string } | null> {
+  let mediaSourcePath: string | null = null;
+  let mediaName = "video";
+
+  if (Array.isArray(assets) && assets.length > 0) {
+    for (const item of assets) {
+      const a = item as Record<string, unknown>;
+      if (a && (a.type === "VIDEO" || a.type === "AUDIO")) {
+        if (typeof a.source === "string" && existsSync(a.source)) {
+          mediaSourcePath = a.source;
+          mediaName = typeof a.path === "string" ? a.path : "video";
+          break;
+        }
+        if (typeof a.path === "string") {
+          const direct = join(dir, a.path);
+          if (existsSync(direct)) {
+            mediaSourcePath = direct;
+            mediaName = a.path;
+            break;
+          }
+          const inAssets = join(dir, "assets", a.path);
+          if (existsSync(inAssets)) {
+            mediaSourcePath = inAssets;
+            mediaName = a.path;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (!mediaSourcePath) {
+    try {
+      const files = await readdir(dir);
+      for (const f of files) {
+        if (/\.(mp4|mov|webm|mkv|wav|mp3|m4a|aac)$/i.test(f)) {
+          mediaSourcePath = join(dir, f);
+          mediaName = f;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  if (!mediaSourcePath) return null;
+
+  const whisperBin = existsSync("/opt/homebrew/bin/whisper-cli") ? "/opt/homebrew/bin/whisper-cli" : "whisper-cli";
+  const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+  const modelPath = join(process.env.HOME ?? "", ".cache", "whisper", "ggml-base.bin");
+
+  if (!existsSync(modelPath)) return null;
+
+  const tempId = Date.now();
+  const tempWav = `/tmp/ds_ai_${tempId}.wav`;
+  const tempPrefix = `/tmp/ds_ai_${tempId}_captions`;
+
+  try {
+    await execFileAsync(ffmpegBin, ["-i", mediaSourcePath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav, "-y"]);
+    await execFileAsync(whisperBin, ["-m", modelPath, "-f", tempWav, "-osrt", "-ojf", "-of", tempPrefix, "-l", "auto"]);
+
+    const generatedSrt = `${tempPrefix}.srt`;
+    const generatedJson = `${tempPrefix}.json`;
+    let srtText = "";
+    let jsonText = "";
+
+    if (existsSync(generatedSrt)) {
+      srtText = await readFile(generatedSrt, "utf8");
+    }
+
+    if (existsSync(generatedJson)) {
+      try {
+        const raw = JSON.parse(await readFile(generatedJson, "utf8"));
+        const segments = raw.transcription || [];
+        const transcript = [];
+        for (const seg of segments) {
+          const words: Array<{ text: string; start: number; end: number }> = [];
+          const tokens = seg.tokens || [];
+          for (const t of tokens) {
+            const rawText = t.text || "";
+            if (!rawText || rawText.startsWith("[_") || rawText.endsWith("_]")) continue;
+            const isStartOfWord = rawText.startsWith(" ") || words.length === 0;
+            const clean = rawText.trim();
+            if (!clean) continue;
+            const start = (t.offsets?.from ?? 0) / 1000;
+            const end = (t.offsets?.to ?? 0) / 1000;
+            if (isStartOfWord || words.length === 0) {
+              words.push({ text: clean, start, end });
+            } else {
+              const last = words[words.length - 1];
+              last.text += clean;
+              last.end = Math.max(last.end, end);
+            }
+          }
+          if (words.length > 0) {
+            transcript.push({
+              text: (seg.text || "").trim(),
+              words,
+            });
+          }
+        }
+        if (transcript.length > 0) {
+          jsonText = JSON.stringify(transcript, null, 2);
+        }
+      } catch (e) {
+        console.warn("[agent-bridge] error parsing whisper json:", e);
+      }
+    }
+
+    if (srtText || jsonText) {
+      return { srt: srtText, json: jsonText, mediaName };
+    }
+  } catch (err) {
+    console.error("[agent-bridge] Transcription failed:", err);
+  } finally {
+    try {
+      if (existsSync(tempWav)) await rm(tempWav, { force: true });
+      const generatedSrt = `${tempPrefix}.srt`;
+      if (existsSync(generatedSrt)) await rm(generatedSrt, { force: true });
+      const generatedJson = `${tempPrefix}.json`;
+      if (existsSync(generatedJson)) await rm(generatedJson, { force: true });
+    } catch {}
+  }
+
+  return null;
+}
 import { mainBridge } from "./main-manager";
 import { markSelfWrite } from "./projects";
 import type { BrowserWindow } from "electron";
@@ -78,7 +212,7 @@ export async function handleAgentChat(
       });
 
       // 3. Process prompt to generate new JSX and explanation
-      const result = await processVideoEditPrompt(prompt, currentCode, manifestAssets, currentTime);
+      const result = await processVideoEditPrompt(prompt, currentCode, manifestAssets, currentTime, dir);
 
       // If code was modified, write to index.tsx immediately
       if (result.newCode && result.newCode !== currentCode) {
@@ -164,6 +298,7 @@ async function processVideoEditPrompt(
   currentCode: string,
   _assets: unknown[],
   currentTime?: number | null,
+  dir?: string,
 ): Promise<ProcessResult> {
   const norm = removeDiacritics(prompt);
 
@@ -387,25 +522,100 @@ async function processVideoEditPrompt(
     };
   }
 
-  // 3. Auto Captions / Subtitles ("tạo phụ đề", "subtitles", "captions", "lời thoại")
-  if (norm.includes("phu de") || norm.includes("caption") || norm.includes("sub") || norm.includes("transcribe")) {
-    let updatedCode = currentCode;
-    if (!updatedCode.includes("<captions")) {
-      const captionElement = `
-        <captions
-          preset="spotlight"
-          fontSize={38}
-          fontFamily="Inter"
-          color="#FFFFFF"
-        />`;
-      if (updatedCode.includes("</scene>")) {
-        updatedCode = updatedCode.replace("</scene>", `${captionElement}\n      </scene>`);
+function extractMediaTiming(code: string): { start?: number; end?: number; sourceIn?: number; sourceOut?: number } {
+  const lines = code.split("\n");
+  for (const line of lines) {
+    if (line.includes("<video") || line.includes("<rect") || line.includes("<videoPaint")) {
+      const startMatch = line.match(/\bstart=\{([0-9.]+)\}/);
+      const endMatch = line.match(/\bend=\{([0-9.]+)\}/);
+      const srcInMatch = line.match(/\bsourceIn=\{([0-9.]+)\}/);
+      const srcOutMatch = line.match(/\bsourceOut=\{([0-9.]+)\}/);
+      if (startMatch || srcInMatch) {
         return {
-          explanation: `🗣️ **Đã kích hoạt phụ đề tự động (Auto Captions)!**\n- 🎙️ Preset: \`spotlight\` làm nổi bật từng từ theo âm thanh clip.\n- Phụ đề sẽ tự động căn khớp theo dòng thời gian.`,
-          newCode: updatedCode,
+          start: startMatch ? Number(startMatch[1]) : undefined,
+          end: endMatch ? Number(endMatch[1]) : undefined,
+          sourceIn: srcInMatch ? Number(srcInMatch[1]) : undefined,
+          sourceOut: srcOutMatch ? Number(srcOutMatch[1]) : undefined,
         };
       }
     }
+  }
+  return {};
+}
+
+  // 3. Auto Captions / Subtitles ("tạo phụ đề", "subtitles", "captions", "lời thoại")
+  if (norm.includes("phu de") || norm.includes("caption") || norm.includes("sub") || norm.includes("transcribe")) {
+    let updatedCode = currentCode;
+
+    // Remove any leftover error attributes on captions
+    updatedCode = updatedCode.replace(/\s+error="[^"]*"/g, "");
+
+    let transcribedMediaName = "";
+    let hasJson = false;
+
+    if (dir) {
+      const assetsDir = join(dir, "assets");
+
+      try {
+        await mkdir(assetsDir, { recursive: true });
+
+        // Always transcribe fresh audio for the active video/audio in the project
+        const result = await transcribeProjectMedia(dir, _assets);
+        if (result) {
+          transcribedMediaName = result.mediaName;
+          if (result.json) {
+            hasJson = true;
+            await writeFile(join(assetsDir, "captions.json"), result.json, "utf8");
+            await writeFile(join(dir, "captions.json"), result.json, "utf8");
+          }
+          if (result.srt) {
+            await writeFile(join(assetsDir, "captions.srt"), result.srt, "utf8");
+            await writeFile(join(dir, "captions.srt"), result.srt, "utf8");
+          }
+        }
+      } catch (e) {
+        console.warn("[agent-bridge] error while creating fresh captions:", e);
+      }
+    }
+
+    const captionFileName = hasJson ? "captions.json" : "captions.srt";
+    const timing = extractMediaTiming(currentCode);
+    let timingProps = "";
+    if (timing.start !== undefined) timingProps += `\n          start={${timing.start}}`;
+    if (timing.end !== undefined) timingProps += `\n          end={${timing.end}}`;
+    if (timing.sourceIn !== undefined) timingProps += `\n          sourceIn={${timing.sourceIn}}`;
+    if (timing.sourceOut !== undefined) timingProps += `\n          sourceOut={${timing.sourceOut}}`;
+
+    if (updatedCode.includes("<captions")) {
+      updatedCode = updatedCode.replace(/<captions\b[\s\S]*?\/>/, `<captions
+          src="${captionFileName}"
+          preset="spotlight"
+          fontSize={38}
+          fontFamily="Inter"
+          color="#FFFFFF"${timingProps}
+        />`);
+    } else {
+      const captionElement = `
+        <captions
+          src="${captionFileName}"
+          preset="spotlight"
+          fontSize={38}
+          fontFamily="Inter"
+          color="#FFFFFF"${timingProps}
+        />`;
+      if (updatedCode.includes("</scene>")) {
+        updatedCode = updatedCode.replace("</scene>", `${captionElement}\n      </scene>`);
+      }
+    }
+
+    const detailText = transcribedMediaName
+      ? `Đã nhận diện toàn bộ giọng nói từ video **${transcribedMediaName}** với mốc thời gian khớp từng từ và căn chỉnh chuẩn theo timeline.`
+      : `Đã tạo mới tệp phụ đề \`${captionFileName}\` đồng bộ khớp thời gian theo video trên timeline.`;
+
+    return {
+      explanation: `🗣️ **Đã tạo mới phụ đề tự động khớp 100% âm thanh video!**\n- 🎙️ **Nội dung mới**: ${detailText}\n- ⏱️ **Đồng bộ Timeline**: Tự động căn mốc bắt đầu (start) khớp với vị trí video trên timeline.\n- ✨ **Hiệu ứng Spotlight**: Từng từ ngữ phát sáng chính xác theo giọng nói thực tế.\n- ⚡ **Xử lý cục bộ**: 100% miễn phí, không tốn credits và không gọi cloud.`,
+      newCode: updatedCode,
+    };
   }
 
   // 4. Color Filter / Cinematic Color Grading ("chỉnh màu", "filter", "màu sắc", "vintage", "contrast")

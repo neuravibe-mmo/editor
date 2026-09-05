@@ -284,8 +284,8 @@ export class AssetLibrary {
 			return this.transient(value);
 		}
 
-		// A project-relative path that exists is a file of the project.
-		if (value.includes('/') && (await this.fs.stat(value))) {
+		// A project-relative path or file that exists in the project.
+		if (await this.fs.stat(value)) {
 			return this.transient(value);
 		}
 

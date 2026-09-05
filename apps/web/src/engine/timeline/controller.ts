@@ -9,7 +9,7 @@
  * controller itself never paints.
  */
 
-import { getTimelineView } from '@diffusionstudio/runtime';
+import { Computed, getTimelineView } from '@diffusionstudio/runtime';
 
 import { assert, clamp } from '@/utils';
 import { getDocumentEditor } from '@/engine/editor';
@@ -28,7 +28,9 @@ import {
 	updateTimelineTransform,
 } from './view';
 import {
+	RULER_HEIGHT,
 	SCROLL_X_SENSITIVITY,
+	TIMELINE_PADDING_LEFT,
 	TIMELINE_RESOLUTION_RANGE,
 	WHEEL_LINE_HEIGHT,
 	WHEEL_PAGE_HEIGHT,
@@ -157,11 +159,27 @@ export function createTimelineController(world: World) {
 				// up whatever the change in scale moved it by.
 				setResolution(world, scene, next);
 				setScrollX(world, scene, scrollX + anchor / resolution - anchor / next);
-			} else if (Math.abs(deltaX) > Math.abs(deltaY)) {
-				setScrollX(world, scene, scrollX + (deltaX * SCROLL_X_SENSITIVITY) / resolution);
 			} else {
-				setScrollY(world, scene, getScrollY(world, scene) + deltaY);
-				applyScroll();
+				const rect = surface.canvas?.getBoundingClientRect();
+				const mouseY = event.clientY - (rect?.top ?? 0);
+				const isOverRuler = mouseY <= RULER_HEIGHT;
+				const canScrollY = layersEl && layersViewportEl
+					? layersEl.scrollHeight > layersViewportEl.clientHeight
+					: false;
+
+				const isHorizontal =
+					event.shiftKey ||
+					Math.abs(deltaX) > Math.abs(deltaY) ||
+					isOverRuler ||
+					(!canScrollY && deltaY !== 0);
+
+				if (isHorizontal) {
+					const delta = (event.shiftKey || isOverRuler || !canScrollY) && deltaX === 0 ? deltaY : deltaX;
+					setScrollX(world, scene, scrollX + (delta * SCROLL_X_SENSITIVITY) / resolution);
+				} else {
+					setScrollY(world, scene, getScrollY(world, scene) + deltaY);
+					applyScroll();
+				}
 			}
 
 			updateTimelineTransform(world, scene);
@@ -193,6 +211,67 @@ export function createTimelineController(world: World) {
 		withScene((scene) => {
 			setScrollY(world, scene, getScrollY(world, scene) + deltaY);
 			applyScroll();
+			updateTimelineTransform(world, scene);
+			reportView(scene);
+		});
+	};
+
+	/** Programmatic horizontal scroll to a frame. */
+	const scrollToX = (frames: number): void => {
+		withScene((scene) => {
+			setScrollX(world, scene, frames);
+			updateTimelineTransform(world, scene);
+			reportView(scene);
+		});
+	};
+
+	/** Programmatic horizontal scroll by a delta in frames. */
+	const scrollXBy = (deltaFrames: number): void => {
+		withScene((scene) => {
+			const current = getScrollX(world, scene);
+			setScrollX(world, scene, current + deltaFrames);
+			updateTimelineTransform(world, scene);
+			reportView(scene);
+		});
+	};
+
+	const zoomIn = (): void => {
+		withScene((scene) => {
+			const res = getResolution(world, scene);
+			const next = clamp(res * 1.3, 1 / TIMELINE_RESOLUTION_RANGE[1], 1 / TIMELINE_RESOLUTION_RANGE[0]);
+			const width = surface.layout?.width ?? 800;
+			const anchor = width / 2;
+			const scrollX = getScrollX(world, scene);
+			setResolution(world, scene, next);
+			setScrollX(world, scene, scrollX + anchor / res - anchor / next);
+			updateTimelineTransform(world, scene);
+			reportView(scene);
+		});
+	};
+
+	const zoomOut = (): void => {
+		withScene((scene) => {
+			const res = getResolution(world, scene);
+			const next = clamp(res / 1.3, 1 / TIMELINE_RESOLUTION_RANGE[1], 1 / TIMELINE_RESOLUTION_RANGE[0]);
+			const width = surface.layout?.width ?? 800;
+			const anchor = width / 2;
+			const scrollX = getScrollX(world, scene);
+			setResolution(world, scene, next);
+			setScrollX(world, scene, scrollX + anchor / res - anchor / next);
+			updateTimelineTransform(world, scene);
+			reportView(scene);
+		});
+	};
+
+	const zoomFit = (): void => {
+		withScene((scene) => {
+			const dur = scene.get(Computed)?.duration ?? 0;
+			const width = surface.layout?.width ?? 800;
+			const availableWidth = Math.max(100, width - 64);
+			const targetFrames = Math.max(30, dur);
+			const targetRes = clamp(availableWidth / targetFrames, 1 / TIMELINE_RESOLUTION_RANGE[1], 1 / TIMELINE_RESOLUTION_RANGE[0]);
+			setResolution(world, scene, targetRes);
+			setScrollX(world, scene, -TIMELINE_PADDING_LEFT / targetRes);
 			updateTimelineTransform(world, scene);
 			reportView(scene);
 		});
@@ -282,6 +361,11 @@ export function createTimelineController(world: World) {
 		detachCanvas,
 		scroll,
 		scrollBy,
+		scrollToX,
+		scrollXBy,
+		zoomIn,
+		zoomOut,
+		zoomFit,
 		clientToFrame,
 		clientToTime,
 		setMinimized,

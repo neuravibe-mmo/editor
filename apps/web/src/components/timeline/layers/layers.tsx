@@ -144,7 +144,11 @@ export function Layers() {
       <div
         class="grid grid-cols-1 h-full absolute border-b border-border inset-0 overflow-hidden"
         on:wheel={timeline.scroll}
-        style={{ 'grid-template-rows': `${RULER_HEIGHT}px 1fr` }}
+        style={{
+          'grid-template-rows': timelineMinimized()
+            ? `${RULER_HEIGHT}px 1fr`
+            : `${RULER_HEIGHT}px 1fr 24px`,
+        }}
         data-timeline-layers-container
       >
         <div
@@ -281,6 +285,11 @@ export function Layers() {
             </LayerContextProvider>
           </div>
         </div>
+        <Show when={!timelineMinimized()}>
+          <div class="h-6 bg-sidebar/95 border-t border-border-strong px-2.5 flex items-center justify-between text-xxs text-muted-foreground select-none">
+            <span>{layers().length} {layers().length === 1 ? 'track' : 'tracks'}</span>
+          </div>
+        </Show>
       </div>
     </div>
   );

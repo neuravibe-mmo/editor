@@ -12,6 +12,7 @@ import { insertAssetsInNewScene } from '@/engine/new-scene';
 import { useLibrary } from '@/engine/library';
 import { useTimeline } from '@/context/timeline';
 import { ASSET_DRAG_TYPE } from '@/components/sidebar-left/folder-item';
+import { TimelineScrollbar } from './timeline-scrollbar';
 
 /**
  * The timeline's canvas. What is drawn on it is the timeline system's
@@ -74,13 +75,16 @@ export function Timeline() {
   };
 
   return (
-    <div class="relative size-full">
-      <canvas
-        class="absolute inset-0"
-        id="timeline-canvas"
-        on:drop={handleDrop}
-        on:dragover={handleDragOver}
-      />
+    <div class="relative size-full flex flex-col overflow-hidden bg-background">
+      <div class="relative flex-1 min-h-0 w-full">
+        <canvas
+          class="absolute inset-0"
+          id="timeline-canvas"
+          on:drop={handleDrop}
+          on:dragover={handleDragOver}
+        />
+      </div>
+      <TimelineScrollbar />
     </div>
   );
 }
