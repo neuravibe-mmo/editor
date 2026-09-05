@@ -1,5 +1,6 @@
 {
   "name": "@diffusionstudio/desktop",
+  "productName": "Vixa",
   "private": true,
   "version": "0.204.1",
   "license": "MPL-2.0",

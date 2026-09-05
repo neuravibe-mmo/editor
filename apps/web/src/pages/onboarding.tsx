@@ -172,7 +172,7 @@ export function OnboardingPage() {
       <Show when={!isDesktop}>
         <div class="flex items-center gap-1 p-4">
           <Icon name="diffusion-logo" class="size-6" />
-          <span class="text-sm font-450 text-foreground">Diffusion Studio</span>
+          <span class="text-sm font-450 text-foreground">Vixa</span>
         </div>
       </Show>
 

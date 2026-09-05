@@ -501,7 +501,7 @@ export function DashboardCardMeta(props: DashboardCardMetaProps) {
 
 type DashboardViewSectionProps = {
   title: string;
-  controls: JSX.Element;
+  controls?: JSX.Element;
   children: JSX.Element;
   class?: string;
   onBackgroundClick?(): void;

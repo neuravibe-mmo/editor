@@ -11,19 +11,21 @@ type DashboardSearchBarProps = {
   value: Accessor<string>;
   onChange: (value: string) => void;
   placeholder: string;
+  controls?: JSX.Element;
 };
 
 type DashboardSearchPanelProps = {
   value: Accessor<string>;
   onChange: (value: string) => void;
   placeholder: string;
+  controls?: JSX.Element;
   children: JSX.Element;
 };
 
 export function DashboardSearchBar(props: DashboardSearchBarProps) {
   return (
-    <div class="flex h-12 shrink-0 items-center border-b border-border px-4">
-      <TextField class="relative flex h-7 w-full items-center gap-0">
+    <div class="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 gap-4">
+      <TextField class="relative flex h-7 flex-1 items-center gap-0">
         <div class="grid size-7 place-items-center overflow-clip text-muted-foreground">
           <Icon name="search" class="size-6" />
         </div>
@@ -42,6 +44,11 @@ export function DashboardSearchBar(props: DashboardSearchBarProps) {
           classList={{ hidden: props.value().length > 0 }}
         />
       </TextField>
+      {props.controls && (
+        <div class="flex shrink-0 items-center">
+          {props.controls}
+        </div>
+      )}
     </div>
   );
 }
@@ -53,6 +60,7 @@ export function DashboardSearchPanel(props: DashboardSearchPanelProps) {
         value={props.value}
         onChange={props.onChange}
         placeholder={props.placeholder}
+        controls={props.controls}
       />
       {props.children}
     </div>

@@ -11,6 +11,7 @@
 // Ctrl-C tears the whole tree down.
 
 import { spawn, execFileSync } from "node:child_process";
+import { existsSync, writeFileSync } from "node:fs";
 import { get } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -152,5 +153,34 @@ try {
 }
 console.log("[dev:desktop] building desktop app…");
 execFileSync("npm", ["run", "build", "--workspace=@diffusionstudio/desktop"], { stdio: "inherit" });
+function setupMacOSBranding() {
+  if (process.platform !== "darwin") return;
+  try {
+    const electronDist = join(ROOT, "node_modules", "electron", "dist");
+    const vixaApp = join(electronDist, "Vixa.app");
+    const electronApp = join(electronDist, "Electron.app");
+    const pathTxt = join(ROOT, "node_modules", "electron", "path.txt");
+    const icnsSrc = join(ROOT, "apps", "desktop", "assets", "icon.icns");
+
+    if (existsSync(electronApp) && !existsSync(vixaApp)) {
+      execFileSync("mv", [electronApp, vixaApp]);
+      execFileSync("ln", ["-s", "Vixa.app", electronApp]);
+    }
+
+    if (existsSync(vixaApp)) {
+      const plist = join(vixaApp, "Contents", "Info.plist");
+      const icnsDest = join(vixaApp, "Contents", "Resources", "electron.icns");
+      execFileSync("plutil", ["-replace", "CFBundleDisplayName", "-string", "Vixa", plist]);
+      execFileSync("plutil", ["-replace", "CFBundleName", "-string", "Vixa", plist]);
+      if (existsSync(icnsSrc)) execFileSync("cp", [icnsSrc, icnsDest]);
+      writeFileSync(pathTxt, "Vixa.app/Contents/MacOS/Electron");
+      execFileSync("codesign", ["--force", "--deep", "--sign", "-", vixaApp]);
+    }
+  } catch (err) {
+    console.warn("[dev:desktop] warning: failed to customize macOS branding:", err.message);
+  }
+}
+
 console.log("[dev:desktop] starting desktop app…");
+setupMacOSBranding();
 run("desktop", "electron-forge", ["start"], join(ROOT, "apps", "desktop"));

@@ -49,18 +49,11 @@ export function DashboardSidebarHeader() {
   return (
     // Extra top padding on the macOS desktop build clears the traffic lights
     // (hiddenInset title bar), except in fullscreen where they are gone.
-    <div class="flex flex-col items-start gap-3 p-4 [[data-platform=darwin]:not([data-fullscreen=true])_&]:pt-14">
-      <Icon name="diffusion-logo-large" class="size-6 text-muted-foreground" />
-      <div class="flex w-full flex-col items-start gap-1 text-muted-foreground">
-        <p class="w-full text-2xl leading-5 font-450 text-muted-foreground">
-          Diffusion Studio
-        </p>
-        <div class="flex w-full items-center py-0.5">
-          <p class="w-full overflow-hidden text-xxs whitespace-nowrap text-ellipsis text-muted-foreground opacity-50">
-            v{APP_VERSION}
-          </p>
-        </div>
-      </div>
+    <div class="flex items-center gap-2.5 p-4 [[data-platform=darwin]:not([data-fullscreen=true])_&]:pt-14">
+      <Icon name="diffusion-logo-large" class="size-8 shrink-0" />
+      <span class="text-sm font-semibold text-foreground tracking-tight">
+        Vixa
+      </span>
     </div>
   );
 }

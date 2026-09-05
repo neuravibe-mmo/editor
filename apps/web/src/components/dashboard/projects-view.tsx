@@ -242,45 +242,47 @@ export function DashboardProjectsView() {
       value={search}
       onChange={setSearch}
       placeholder="Search in projects"
+      controls={
+        <Select<(typeof SORT_OPTIONS)[number]>
+          options={SORT_OPTIONS}
+          value={selectedSortOption()}
+          onChange={(option) => option && setSort(option.id)}
+          optionValue="id"
+          optionTextValue="label"
+          class="space-y-0"
+          itemComponent={(itemProps) => (
+            <SelectItem item={itemProps.item}>
+              {itemProps.item.rawValue.label}
+            </SelectItem>
+          )}
+        >
+          <SelectTrigger aria-label="Sort projects" class="h-7">
+            <SelectValue<(typeof SORT_OPTIONS)[number]>>
+              {(state) => state.selectedOption()?.label}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPortal>
+            <SelectContent />
+          </SelectPortal>
+        </Select>
+      }
     >
       <DashboardViewSection
         class="pb-4"
         title="Recent projects"
         onBackgroundClick={() => setSelectedProject(null)}
-        controls={
-          <>
-            <Select<(typeof SORT_OPTIONS)[number]>
-              options={SORT_OPTIONS}
-              value={selectedSortOption()}
-              onChange={(option) => option && setSort(option.id)}
-              optionValue="id"
-              optionTextValue="label"
-              itemComponent={(itemProps) => (
-                <SelectItem item={itemProps.item}>
-                  {itemProps.item.rawValue.label}
-                </SelectItem>
-              )}
-            >
-              <SelectTrigger aria-label="Sort projects">
-                <SelectValue<(typeof SORT_OPTIONS)[number]>>
-                  {(state) => state.selectedOption()?.label}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPortal>
-                <SelectContent />
-              </SelectPortal>
-            </Select>
-          </>
-        }
       >
-        <DashboardCardButton onClick={handleCreateProject}>
-          <DashboardCardPreview class="bg-overlay-soft group-hover:bg-overlay">
-            <Icon
-              name="plus-add"
-              class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-muted-foreground"
-            />
+        <DashboardCardButton
+          onClick={handleCreateProject}
+          class="hover:bg-accent/40"
+        >
+          <DashboardCardPreview class="border-dashed border-primary/35 group-hover:border-primary/80 bg-gradient-to-br from-primary/[0.08] via-overlay-soft to-purple-500/[0.08] group-hover:from-primary/[0.16] group-hover:to-purple-500/[0.16] transition-all duration-200 flex items-center justify-center">
+            <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.18),transparent_70%)] opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+            <div class="relative size-11 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary group-hover:shadow-[0_0_24px_rgba(59,130,246,0.45)] transition-all duration-200">
+              <Icon name="plus-add" class="size-5" />
+            </div>
           </DashboardCardPreview>
-          <DashboardCardMeta title="New project" />
+          <DashboardCardMeta title="New project" subtitle="Blank project" />
         </DashboardCardButton>
         <For each={sortedProjects().slice(0, MAX_VISIBLE_PROJECTS)}>
           {(project) => (

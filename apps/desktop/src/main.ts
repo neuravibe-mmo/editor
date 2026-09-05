@@ -50,7 +50,7 @@ const AUTH_PROTOCOL = "diffusion";
 const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
-app.setName("Diffusion Studio");
+app.setName("Vixa");
 app.commandLine.appendSwitch("enable-blink-features", "CanvasDrawElement");
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
@@ -223,7 +223,7 @@ function createWindow(show = true) {
     mainWindow = null;
   });
 
-  if (!app.isPackaged) {
+  if (!app.isPackaged || !app.getAppPath().includes("app.asar")) {
     mainWindow.loadURL(DEV_URL);
   } else {
     mainWindow.loadFile(join(app.getAppPath(), "web", "index.html"));
@@ -351,9 +351,12 @@ if (app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
-    if (!app.isPackaged && process.platform === "darwin") {
-      const devIcon = nativeImage.createFromPath(join(app.getAppPath(), "assets", "icon-dev.png"));
-      if (!devIcon.isEmpty()) app.dock?.setIcon(devIcon);
+    if (process.platform === "darwin") {
+      let iconImg = nativeImage.createFromPath(join(app.getAppPath(), "assets", "icon.png"));
+      if (iconImg.isEmpty()) {
+        iconImg = nativeImage.createFromPath(join(__dirname, "..", "assets", "icon.png"));
+      }
+      if (!iconImg.isEmpty()) app.dock?.setIcon(iconImg);
     }
 
     setupAppMenu();

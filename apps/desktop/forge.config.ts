@@ -13,12 +13,12 @@ const { version } = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package
 
 const config: ForgeConfig = {
   packagerConfig: {
-    name: 'Diffusion Studio',
+    name: 'Vixa',
     appBundleId: 'studio.diffusion.editor',
     appCategoryType: 'public.app-category.video',
     appVersion: version,
     icon: './assets/icon',
-    protocols: [{ name: 'Diffusion Studio', schemes: ['diffusion'] }],
+    protocols: [{ name: 'Vixa', schemes: ['diffusion'] }],
     prune: false,
     ignore: (path) =>
       path !== '' &&
