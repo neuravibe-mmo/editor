@@ -25,7 +25,7 @@ export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
     if (filter() === "custom") return custom;
     if (filter() === "capcut") return capcut;
     if (filter() === "pro") return capcut.filter((p) => p.isPro);
-    return [...custom, ...capcut];
+    return [...capcut, ...custom];
   });
 
   const isResetActive = () =>

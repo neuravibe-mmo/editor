@@ -79,8 +79,10 @@ export class Token {
 		this.offset = options.offset;
 		this.metrics = options.metrics;
 		this.ranges = options.ranges;
-		this.width = options.metrics.width;
-		this.height = options.metrics.fontBoundingBoxAscent + options.metrics.fontBoundingBoxDescent;
+		const ascent = options.metrics.fontBoundingBoxAscent || options.metrics.actualBoundingBoxAscent || 30;
+		const descent = options.metrics.fontBoundingBoxDescent || options.metrics.actualBoundingBoxDescent || 10;
+		this.width = options.metrics.width || 0;
+		this.height = (ascent + descent) || 40;
 		this.chars = options.chars;
 	}
 
@@ -129,7 +131,7 @@ export class Token {
 	}
 }
 
-function applyFont(ctx: Ctx, world: World, entity: Entity, ranges: Entity[]) {
+export function applyFont(ctx: Ctx, world: World, entity: Entity, ranges: Entity[]) {
 	const size = getFontSize(world, entity, ranges);
 	const family = getFontFamily(world, entity, ranges);
 	const weight = getFontWeight(world, entity, ranges);
@@ -145,7 +147,7 @@ function applyFont(ctx: Ctx, world: World, entity: Entity, ranges: Entity[]) {
 	ctx.letterSpacing = `${spacing}px`;
 }
 
-function shapeTokens(world: World, entity: Entity): void {
+export function shapeTokens(world: World, entity: Entity): void {
 	const computed = store(world, Computed);
 	const textStyle = store(world, TextStyle);
 	const eid = entity.id();
@@ -220,7 +222,7 @@ function shapeTokens(world: World, entity: Entity): void {
 	}
 }
 
-function tokenizeText(world: World, entity: Entity) {
+export function tokenizeText(world: World, entity: Entity) {
 	const ctx = getMeasureCtx();
 
 	// Split text into segments based on style overrides first
@@ -264,8 +266,7 @@ function tokenizeText(world: World, entity: Entity) {
 	store(world, TextCache).tokens[entity.id()] = lines;
 }
 
-/** Renders text tokens directly to the given canvas context. */
-function renderTokens(ctx: Ctx, world: World, entity: Entity): void {
+export function renderTokens(ctx: Ctx, world: World, entity: Entity): void {
 	const eid = entity.id();
 	const lines = store(world, TextCache).tokens[eid];
 	if (!lines) return;

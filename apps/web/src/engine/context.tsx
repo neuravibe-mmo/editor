@@ -7,7 +7,9 @@ import { WorldProvider } from '@diffusionstudio/koota-solid';
 
 import { createEngine, type Engine, type EngineOptions } from './create-engine';
 
-const EngineContext = createContext<Engine>();
+import type { Context } from 'solid-js';
+const CONTEXT_KEY = Symbol.for('diffusionstudio.engineContext');
+const EngineContext: Context<Engine | undefined> = ((globalThis as any)[CONTEXT_KEY] ??= createContext<Engine>());
 
 export interface EngineProviderProps {
 	projectId: string;
