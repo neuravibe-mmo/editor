@@ -80,14 +80,14 @@ function advancePlayhead(world: World, entity: Entity): void {
 				time = minSeconds;
 				looped = true;
 			} else {
-				playback.playing[eid] = false;
+				entity.set(Playback, { playing: false });
 			}
 		} else if (time <= minSeconds) {
 			if (playback.loop[eid] === true) {
 				time = maxSeconds;
 				looped = true;
 			} else {
-				playback.playing[eid] = false;
+				entity.set(Playback, { playing: false });
 				time = minSeconds;
 			}
 		}
