@@ -28,6 +28,7 @@ import {
   handleAddText,
   handleColorGrade,
   handleCompositeEffects,
+  handleCenterCamera,
   handleResetOriginal,
 } from "./agent/timeline-modifiers";
 
@@ -350,9 +351,24 @@ async function processVideoEditPrompt(
     if (res) return res;
   }
 
-  // 13. Khôi phục / Reset ban đầu
+  // 13. Canh giữa / Chỉnh lại vị trí khung hình
+  if (
+    norm.includes("canh giua") ||
+    norm.includes("can giua") ||
+    norm.includes("chinh vi tri") ||
+    norm.includes("vi tri khung") ||
+    norm.includes("lech") ||
+    norm.includes("fit") ||
+    norm.includes("center") ||
+    norm.includes("recenter")
+  ) {
+    const res = handleCenterCamera(currentCode);
+    if (res) return res;
+  }
+
+  // 14. Khôi phục / Reset ban đầu
   if (norm.includes("hoan tac") || norm.includes("khoi phuc") || norm.includes("ban dau") || norm.includes("reset") || norm.includes("undo")) {
-    return handleResetOriginal();
+    return handleResetOriginal(currentCode, assets);
   }
 
   // Fallback response with helpful guide

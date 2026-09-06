@@ -345,21 +345,64 @@ export function handleCompositeEffects(currentCode: string): ActionResult | null
 }
 
 /**
+ * Center camera framing for the scene.
+ */
+export function handleCenterCamera(currentCode: string): ActionResult | null {
+  if (!currentCode.includes("<stage")) return null;
+
+  let updatedCode = currentCode;
+  if (currentCode.includes("camera={")) {
+    updatedCode = currentCode.replace(/camera=\{[^\}]+\}/, `camera={[0.35, 0, 0, 0.35, 180, 80]}`);
+  } else {
+    updatedCode = updatedCode.replace("<stage", `<stage camera={[0.35, 0, 0, 0.35, 180, 80]}`);
+  }
+
+  return {
+    explanation: `🎯 **Đã căn chỉnh lại khung video vào chính giữa màn hình!**\n\n- Khung video đã được căn giữa viewport cân đối với giao diện làm việc.\n- Bạn cũng có thể bấm icon **Canh giữa khung hình** (hoặc phím tắt **⌘1**) trên thanh công cụ phía dưới bất cứ lúc nào!`,
+    newCode: updatedCode,
+  };
+}
+
+/**
  * Handles revert / undo to original state.
  */
-export function handleResetOriginal(): ActionResult {
+export function handleResetOriginal(currentCode?: string, assets?: unknown[]): ActionResult {
+  let videoSrc = "Readme.mp4";
+  let videoName = "Readme.mp4";
+  let videoDuration = 10.73;
+
+  if (currentCode) {
+    const srcMatch = currentCode.match(/src="([^"]+\.(?:mp4|mov|webm))"/i);
+    if (srcMatch) {
+      videoSrc = srcMatch[1];
+      videoName = videoSrc;
+    }
+    const endMatch = currentCode.match(/\bend=\{([0-9.]+)\}/);
+    if (endMatch) {
+      videoDuration = Number(endMatch[1]);
+    }
+  }
+
+  if (Array.isArray(assets) && assets.length) {
+    const videoAsset = assets.find((a: any) => typeof a?.name === "string" && /\.(mp4|mov|webm)$/i.test(a.name));
+    if (videoAsset) {
+      videoSrc = (videoAsset as any).name;
+      videoName = videoSrc;
+    }
+  }
+
   const defaultCode = `import type { Time } from "@diffusionstudio/jsx";
 
 export default function Project() {
   return (
-    <stage background="#161616" camera={[0.5, 0, 0, 0.5, 0, 0]} id="stage-root">
+    <stage background="#161616" camera={[0.35, 0, 0, 0.35, 180, 80]} id="stage-root">
       <scene name="Main" width={720} height={1280} fill="#000000" active id="main-scene">
         <sequence name="A-roll" id="a-roll-seq">
           <video
-            name="123.mp4"
-            src="123.mp4"
+            name="${videoName}"
+            src="${videoSrc}"
             start={0}
-            end={10.73}
+            end={${videoDuration}}
             width={720}
             height={1280}
             id="video-1"
@@ -371,7 +414,7 @@ export default function Project() {
 }
 `;
   return {
-    explanation: `🔄 **Đã hoàn tác video về trạng thái nguyên bản gốc (10.73s).**`,
+    explanation: `🔄 **Đã hoàn tác video về trạng thái nguyên bản gốc (${videoDuration}s) và căn giữa khung hình.**`,
     newCode: defaultCode,
   };
 }
