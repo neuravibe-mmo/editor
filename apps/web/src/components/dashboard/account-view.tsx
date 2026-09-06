@@ -26,6 +26,8 @@ import { TextField, TextFieldInput, TextFieldLabel } from "@/components/ui/text-
 import { useAuth } from "@/context/auth";
 import { supabase } from "@/lib/supabase";
 import { trpc } from "@/lib/trpc";
+import { mainBridge } from "@/lib/ipc";
+import { MAIN_CHANNELS } from "@desktop/main-channels";
 
 import {
   DashboardDividedStack,
@@ -157,6 +159,12 @@ function DashboardAccountPersonalDetailsSection() {
 
   const avatarUrl = useAvatar();
   const displayUrl = () => localPreview() ?? avatarUrl();
+  const [avatarFailed, setAvatarFailed] = createSignal(false);
+
+  createEffect(() => {
+    displayUrl();
+    setAvatarFailed(false);
+  });
 
   const initial = () => {
     const name = auth.user()?.user_metadata?.full_name || auth.user()?.email || "U";
@@ -236,7 +244,7 @@ function DashboardAccountPersonalDetailsSection() {
 
         <div class="flex items-center gap-4">
           <Show
-            when={displayUrl()}
+            when={!avatarFailed() ? displayUrl() : null}
             fallback={
               <div class="grid size-16 place-items-center rounded-md bg-input text-lg text-foreground">
                 {initial()}
@@ -247,6 +255,8 @@ function DashboardAccountPersonalDetailsSection() {
               <img
                 src={url()}
                 alt=""
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarFailed(true)}
                 class="size-16 rounded-md object-cover"
               />
             )}
@@ -396,6 +406,73 @@ function DashboardAccountLoginSecuritySection() {
           </TextField>
         </div>
       </DashboardFormModal>
+    </DashboardSurfaceSection>
+  );
+}
+
+function DashboardAccountDeviceIdSection() {
+  const [deviceId, setDeviceId] = createSignal<string>("");
+  const [copied, setCopied] = createSignal(false);
+
+  createEffect(() => {
+    async function loadDeviceId() {
+      try {
+        if (window.desktop) {
+          const id = await mainBridge.call(MAIN_CHANNELS.SYSTEM_GET_DEVICE_ID, undefined);
+          if (id) {
+            setDeviceId(id);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to get desktop device id:", err);
+      }
+
+      // Web fallback
+      let webId = localStorage.getItem("device_id");
+      if (!webId) {
+        webId = crypto.randomUUID().toUpperCase();
+        localStorage.setItem("device_id", webId);
+      }
+      setDeviceId(webId);
+    }
+
+    void loadDeviceId();
+  });
+
+  const handleCopy = async () => {
+    const id = deviceId();
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      toast.success("ID đã được sao chép vào clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Không thể sao chép vào clipboard");
+    }
+  };
+
+  return (
+    <DashboardSurfaceSection title="ID">
+      <div class="flex items-center justify-between gap-4 py-1">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <Icon name="mac-device" class="size-6 text-foreground shrink-0" />
+          <span class="text-xs text-primary font-mono tracking-wider truncate select-none">
+            ••••••••-••••-••••-••••-••••••••••••
+          </span>
+        </div>
+
+        <Button
+          variant="secondary"
+          size="small"
+          onClick={handleCopy}
+          class="h-8 gap-1.5 text-xs font-medium px-3 flex items-center shrink-0"
+        >
+          <Icon name={copied() ? "confirm-check" : "copy"} class="size-4 text-foreground" />
+          <span>{copied() ? "Đã sao chép" : "Copy ID"}</span>
+        </Button>
+      </div>
     </DashboardSurfaceSection>
   );
 }
@@ -638,6 +715,7 @@ export function DashboardAccountView() {
     <DashboardScrollView>
       <DashboardAccountPersonalDetailsSection />
       <DashboardAccountLoginSecuritySection />
+      <DashboardAccountDeviceIdSection />
       <DashboardAccountActiveSessionsSection />
       <DashboardAccountLinkedAccountsSection />
       <DashboardAccountEmailPreferencesSection />

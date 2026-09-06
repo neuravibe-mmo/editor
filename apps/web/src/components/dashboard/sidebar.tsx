@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Show, type JSX } from "solid-js";
+import { createEffect, createSignal, Show, type JSX } from "solid-js";
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/context/auth";
 import { useAvatar } from "@/hooks/use-avatar";
@@ -94,6 +94,12 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
 
   const initial = () => displayName().charAt(0).toUpperCase();
   const avatarUrl = useAvatar();
+  const [avatarFailed, setAvatarFailed] = createSignal(false);
+
+  createEffect(() => {
+    avatarUrl();
+    setAvatarFailed(false);
+  });
 
   return (
     <div class="p-2">
@@ -104,7 +110,7 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
         classList={{ "bg-accent": props.active }}
       >
         <Show
-          when={avatarUrl()}
+          when={!avatarFailed() ? avatarUrl() : null}
           fallback={
             <div class="grid size-8 shrink-0 place-items-center rounded-full bg-input text-xs text-foreground">
               {initial()}
@@ -115,6 +121,8 @@ export function DashboardSidebarUser(props: DashboardSidebarUserProps) {
             <img
               src={url()}
               alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setAvatarFailed(true)}
               class="size-8 shrink-0 rounded-full object-cover"
             />
           )}

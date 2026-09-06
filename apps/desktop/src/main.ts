@@ -5,7 +5,7 @@
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
 import { basename, dirname, extname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { mkdir, open, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -488,6 +488,68 @@ if (app.requestSingleInstanceLock()) {
     }
   });
 
+let cachedDeviceId: string | null = null;
+
+async function getDeviceId(): Promise<string> {
+  if (cachedDeviceId) return cachedDeviceId;
+
+  const storageFile = join(app.getPath("userData"), "device_id.json");
+  try {
+    if (existsSync(storageFile)) {
+      const data = JSON.parse(await readFile(storageFile, "utf-8"));
+      if (data?.deviceId) {
+        cachedDeviceId = data.deviceId;
+        return cachedDeviceId!;
+      }
+    }
+  } catch {}
+
+  let deviceId: string | null = null;
+
+  if (process.platform === "darwin") {
+    try {
+      const { stdout } = await execFileAsync("/usr/sbin/ioreg", ["-rd1", "-c", "IOPlatformExpertDevice"]);
+      const match = stdout.match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/);
+      if (match?.[1]) {
+        deviceId = match[1].trim();
+      }
+    } catch {}
+  } else if (process.platform === "win32") {
+    try {
+      const { stdout } = await execFileAsync("powershell.exe", [
+        "-NoProfile",
+        "-Command",
+        "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID",
+      ]);
+      const trimmed = stdout.trim();
+      if (trimmed && trimmed.length > 10) {
+        deviceId = trimmed;
+      }
+    } catch {}
+  } else if (process.platform === "linux") {
+    try {
+      if (existsSync("/etc/machine-id")) {
+        deviceId = (await readFile("/etc/machine-id", "utf-8")).trim();
+      } else if (existsSync("/var/lib/dbus/machine-id")) {
+        deviceId = (await readFile("/var/lib/dbus/machine-id", "utf-8")).trim();
+      }
+    } catch {}
+  }
+
+  if (!deviceId) {
+    deviceId = randomUUID();
+  }
+
+  cachedDeviceId = deviceId;
+  try {
+    await mkdir(dirname(storageFile), { recursive: true });
+    await writeFile(storageFile, JSON.stringify({ deviceId }, null, 2), "utf-8");
+  } catch {}
+
+  return deviceId;
+}
+
+  mainBridge.handle(MAIN_CHANNELS.SYSTEM_GET_DEVICE_ID, () => getDeviceId());
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");
@@ -576,6 +638,15 @@ if (app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true));
     session.defaultSession.setPermissionCheckHandler(() => true);
     session.defaultSession.setDevicePermissionHandler(() => true);
+
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+      { urls: ["*://*.googleusercontent.com/*"] },
+      (details, callback) => {
+        delete details.requestHeaders["Referer"];
+        delete details.requestHeaders["referer"];
+        callback({ cancel: false, requestHeaders: details.requestHeaders });
+      }
+    );
 
     const url = findProtocolUrl(process.argv);
     if (url) deliverDeepLink(url);

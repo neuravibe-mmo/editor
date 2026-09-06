@@ -78,6 +78,7 @@ export const MAIN_CHANNELS = {
   MEDIA_REMOVE_BG_VIDEO: "media:remove-bg-video",
   MEDIA_TTS: "media:tts",
   MEDIA_GENERATE_IMAGE: "media:generate-image",
+  SYSTEM_GET_DEVICE_ID: "system:get-device-id",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -149,6 +150,7 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.SKILLS_IS_INSTALLED]: { request: void; response: boolean };
   [MAIN_CHANNELS.SKILLS_INSTALL]: { request: void; response: SkillsInstallResult };
   [MAIN_CHANNELS.WINDOW_IS_FULLSCREEN]: { request: void; response: boolean };
+  [MAIN_CHANNELS.SYSTEM_GET_DEVICE_ID]: { request: void; response: string };
   [MAIN_CHANNELS.WINDOW_CAPTURE]: { request: void; response: ScreenshotResult };
   [MAIN_CHANNELS.FILE_TRANSFER]: {
     request: { selector: string; absolutePath: string };

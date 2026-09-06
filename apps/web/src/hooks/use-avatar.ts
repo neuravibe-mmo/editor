@@ -16,7 +16,8 @@ export function useAvatar(): Accessor<string | null> {
   const [displayUrl, setDisplayUrl] = createSignal<string | null>(null);
 
   createEffect(() => {
-    const url = auth.user()?.user_metadata?.avatar_url as string | undefined;
+    const meta = auth.user()?.user_metadata;
+    const url = (meta?.avatar_url || meta?.picture) as string | undefined;
     if (!url) {
       setDisplayUrl(null);
       return;
@@ -32,12 +33,17 @@ export function useAvatar(): Accessor<string | null> {
     void supabase.storage
       .from("avatars")
       .download(url)
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (data && !error) {
           const prev = displayUrl();
           if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
           setDisplayUrl(URL.createObjectURL(data));
+        } else {
+          setDisplayUrl(null);
         }
+      })
+      .catch(() => {
+        setDisplayUrl(null);
       });
   });
 
