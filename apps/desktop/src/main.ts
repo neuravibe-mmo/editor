@@ -3,10 +3,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
-import { dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
+import { existsSync } from "node:fs";
 import { mkdir, open, unlink } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
+
+const execFileAsync = promisify(execFile);
 import { updateElectronApp } from "update-electron-app";
 import { startCliServer, stopCliServer, isHeadless } from "./cli-server";
 import { installCli, isCliInstalled } from "./cli-install";
@@ -275,6 +280,42 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.AGENT_CHAT_SEND, (req, event) =>
     handleAgentChat(BrowserWindow.fromWebContents(event.sender), req),
   );
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_CONVERT_H264, async ({ inputPath, outputPath }) => {
+    const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+    const dir = dirname(inputPath);
+    const ext = extname(inputPath);
+    const base = basename(inputPath, ext);
+    const targetOut = outputPath || join(dir, `${base}_h264.mp4`);
+
+    try {
+      await execFileAsync(ffmpegBin, [
+        "-i", inputPath,
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        targetOut,
+        "-y"
+      ]);
+      return { success: true, outputPath: targetOut };
+    } catch (err) {
+      // Fallback to /tmp if primary directory is not writable
+      try {
+        const tmpOut = join("/tmp", `${base}_h264_${Date.now()}.mp4`);
+        await execFileAsync(ffmpegBin, [
+          "-i", inputPath,
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          "-c:a", "copy",
+          tmpOut,
+          "-y"
+        ]);
+        return { success: true, outputPath: tmpOut };
+      } catch (err2) {
+        console.error("[media-convert] ffmpeg failed:", err2);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  });
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");

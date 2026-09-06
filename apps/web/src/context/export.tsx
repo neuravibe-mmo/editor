@@ -178,8 +178,14 @@ export function ExportProvider(props: { children: JSX.Element }) {
     else exportActiveScene();
   };
 
-  onMount(() => window.addEventListener("keydown", handleShortcut));
-  onCleanup(() => window.removeEventListener("keydown", handleShortcut));
+  onMount(() => {
+    window.addEventListener("keydown", handleShortcut);
+    window.addEventListener("vixa:export", exportActiveScene);
+  });
+  onCleanup(() => {
+    window.removeEventListener("keydown", handleShortcut);
+    window.removeEventListener("vixa:export", exportActiveScene);
+  });
 
   return (
     <ExportContext.Provider value={{ exportScene, exportCurrentFrame, exporting }}>

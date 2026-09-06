@@ -83,6 +83,11 @@ export function setupAppMenu() {
           accelerator: "CmdOrCtrl+I",
           click: () => dispatchToFocusedWindow("vixa:import"),
         },
+        {
+          label: "Export",
+          accelerator: "CmdOrCtrl+E",
+          click: () => dispatchToFocusedWindow("vixa:export"),
+        },
         { type: "separator" },
         { role: "close" },
       ],

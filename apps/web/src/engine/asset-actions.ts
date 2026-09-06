@@ -10,12 +10,16 @@ import { importFiles as importFilesInto, pickFiles, saveAssetAs as saveAs } from
 import { insertAsset } from "./insert-asset";
 import { forgetAssetMedia } from "./timeline/media";
 import { forgetAssetPeaks } from "./timeline/peaks";
+import { mainBridge } from "@/lib/ipc";
+import { MAIN_CHANNELS } from "@desktop/main-channels";
 
 import type { World } from "koota";
 
 import type { Asset, AssetLibrary } from "@diffusionstudio/assets";
 
 export { droppedFiles, pickFiles } from "@diffusionstudio/assets";
+
+const VIDEO_EXTENSIONS = /\.(mp4|mov|m4v|avi|mkv|webm|flv|wmv|ts|mts)$/i;
 
 /** Saves a copy of an asset's file where the user says; reports failure. */
 export async function saveAssetAs(asset: Pick<Asset, "handle" | "mimeType" | "path">): Promise<void> {
@@ -33,7 +37,38 @@ export async function importFiles(library: AssetLibrary, files: ReadonlyArray<Fi
   if (report.unnamed.length) {
     toast("Some files could not be imported", { description: "Only files on this computer can be added to the library." });
   }
-  for (const { source, error } of report.failed) {
+
+  const stillFailed: Array<{ source: string; error: Error }> = [];
+
+  for (const item of report.failed) {
+    const { source } = item;
+    const isVideo = VIDEO_EXTENSIONS.test(source);
+    if (isVideo && window.desktop) {
+      const filename = source.split(/[\\/]/).pop() || source;
+      const loadingToastId = toast.loading(`Đang chuyển đổi ${filename} sang chuẩn H.264...`);
+      try {
+        const res = await mainBridge.call(MAIN_CHANNELS.MEDIA_CONVERT_H264, { inputPath: source });
+        if (res.success && res.outputPath) {
+          const convertedReport = await library.import([res.outputPath], { folder });
+          if (convertedReport.assets.length > 0) {
+            report.assets.push(...convertedReport.assets);
+            toast.dismiss(loadingToastId);
+            toast.success(`Đã chuyển đổi và thêm ${res.outputPath.split(/[\\/]/).pop()}!`);
+            continue;
+          }
+        }
+        toast.dismiss(loadingToastId);
+        stillFailed.push(item);
+      } catch (convErr) {
+        toast.dismiss(loadingToastId);
+        stillFailed.push(item);
+      }
+    } else {
+      stillFailed.push(item);
+    }
+  }
+
+  for (const { source, error } of stillFailed) {
     toast.error(`Could not import ${source.split(/[\\/]/).pop()}`, { description: error.message });
   }
   return report.assets;
@@ -62,6 +97,22 @@ export async function replaceAssetSource(library: AssetLibrary, asset: Asset): P
     forgetAssetPeaks(asset.id);
     return relinked;
   } catch (error) {
+    if (VIDEO_EXTENSIONS.test(path) && window.desktop) {
+      const filename = path.split(/[\\/]/).pop() || path;
+      const loadingToastId = toast.loading(`Đang chuyển đổi ${filename} sang chuẩn H.264...`);
+      try {
+        const res = await mainBridge.call(MAIN_CHANNELS.MEDIA_CONVERT_H264, { inputPath: path });
+        if (res.success && res.outputPath) {
+          const relinked = await library.relink(asset, res.outputPath);
+          forgetAssetMedia(asset.id);
+          forgetAssetPeaks(asset.id);
+          toast.dismiss(loadingToastId);
+          toast.success(`Đã chuyển đổi và thay thế bằng ${res.outputPath.split(/[\\/]/).pop()}!`);
+          return relinked;
+        }
+      } catch {}
+      toast.dismiss(loadingToastId);
+    }
     toast.error("Failed to replace", { description: (error as Error).message });
     return null;
   }

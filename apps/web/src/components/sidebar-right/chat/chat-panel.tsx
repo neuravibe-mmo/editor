@@ -128,30 +128,19 @@ export function ChatPanel() {
       <div class="h-11 px-3 border-b border-border flex items-center justify-between shrink-0 bg-background/50 backdrop-blur">
         <div class="flex items-center gap-2">
           <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span class="text-xs font-semibold tracking-wide text-foreground">AI Assistant</span>
           <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20">
             {agentStatus().provider}
           </span>
         </div>
         <div class="flex items-center gap-1.5">
           <Button
-            variant="outline"
-            size="small"
-            class="h-7 px-2.5 text-[11px] gap-1.5 font-medium border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/60 transition-colors cursor-pointer"
-            onClick={handleExport}
-            title="Xuất file video (⌘E)"
-          >
-            <Icon name="arrow-right" class="w-3 h-3 -rotate-45" />
-            <span>Xuất video</span>
-          </Button>
-          <Button
             variant="ghost"
             size="icon-square"
             class="text-muted-foreground hover:text-foreground h-7 w-7"
             onClick={clearMessages}
-            title="Xóa lịch sử chat"
+            title="Đoạn chat mới"
           >
-            <Icon name="trash" class="w-3.5 h-3.5" />
+            <Icon name="plus-add" class="size-4" />
           </Button>
         </div>
       </div>

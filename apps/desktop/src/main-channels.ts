@@ -71,6 +71,9 @@ export const MAIN_CHANNELS = {
   AGENT_STATUS: "agent:status",
   AGENT_CHAT_SEND: "agent:chat:send",
 
+  // Media conversion channel
+  MEDIA_CONVERT_H264: "media:convert-h264",
+
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
   CHECKOUT_CALLBACK: "checkout:callback",
@@ -220,6 +223,17 @@ export type MainRequestMap = {
       currentTime?: number | null;
     };
     response: { ok: boolean; messageId: string };
+  };
+  [MAIN_CHANNELS.MEDIA_CONVERT_H264]: {
+    request: {
+      inputPath: string;
+      outputPath?: string;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      error?: string;
+    };
   };
 };
 
