@@ -84,6 +84,7 @@ export function ChatPanel() {
   const quickActions = [
     { label: "🚀 Xuất video", action: handleExport },
     { label: "💎 Nâng cấp độ nét", prompt: "Nâng cấp độ nét và khử mờ cho video" },
+    { label: "🪄 Xóa nền / Phông xanh", prompt: "Xóa nền cho video/ảnh của tôi" },
     { label: "🎵 Thêm nhạc nền", prompt: "Tìm các đoạn nhạc background hay để thêm vào video cho tôi" },
     { label: "🎬 Hiệu ứng", prompt: "Thêm các hiệu ứng vào video cho tôi" },
     { label: "✂️ Cắt 0s - 4s", prompt: "Cắt video giữ lại từ 0s đến 4s" },

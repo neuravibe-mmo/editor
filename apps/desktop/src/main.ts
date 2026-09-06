@@ -361,6 +361,65 @@ if (app.requestSingleInstanceLock()) {
       }
     }
   });
+
+  // Background removal for Images (PNG with alpha)
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_REMOVE_BG_IMAGE, async ({ inputPath, outputPath }) => {
+    const dir = dirname(inputPath);
+    const ext = extname(inputPath);
+    const base = basename(inputPath, ext);
+    const targetOut = outputPath || join(dir, `${base}_nobg.png`);
+
+    try {
+      // 1. Check if rembg (Python) is installed
+      try {
+        await execFileAsync("rembg", ["i", inputPath, targetOut]);
+        return { success: true, outputPath: targetOut };
+      } catch {}
+
+      // 2. Fallback: FFmpeg colorkey on pure background if uniform (white/black/green)
+      const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+      await execFileAsync(ffmpegBin, [
+        "-i", inputPath,
+        "-vf", "colorkey=0xFFFFFF:0.1:0.1",
+        "-c:v", "png",
+        targetOut,
+        "-y",
+      ]);
+      return { success: true, outputPath: targetOut };
+    } catch (err) {
+      console.error("[media-remove-bg-image] failed:", err);
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // Background removal for Video (Green screen chromakey or colorkey)
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_REMOVE_BG_VIDEO, async ({ inputPath, outputPath, keyColor = "0x00FF00", similarity = 0.25, blend = 0.05 }) => {
+    const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+    const dir = dirname(inputPath);
+    const ext = extname(inputPath);
+    const base = basename(inputPath, ext);
+    // WebM with VP9 supports alpha channel transparency in browser canvas
+    const targetOut = outputPath || join(dir, `${base}_transparent.webm`);
+
+    try {
+      // Chromakey filter for green/blue screen to transparent WebM VP9
+      const filter = `chromakey=${keyColor}:${similarity}:${blend}`;
+      await execFileAsync(ffmpegBin, [
+        "-i", inputPath,
+        "-vf", filter,
+        "-c:v", "libvpx-vp9",
+        "-pix_fmt", "yuva420p",
+        "-c:a", "libopus",
+        targetOut,
+        "-y",
+      ]);
+      return { success: true, outputPath: targetOut };
+    } catch (err) {
+      console.error("[media-remove-bg-video] failed:", err);
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");

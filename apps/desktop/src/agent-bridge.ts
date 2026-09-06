@@ -776,7 +776,109 @@ async function processVideoEditPrompt(
     }
   }
 
-  // 5. Color Filter / Cinematic Color Grading ("chỉnh màu", "filter", "màu sắc", "vintage", "contrast")
+  // 5. Background Removal / Xóa nền ảnh / Xóa phông xanh video ("xoa nen", "tach nen", "xoa phong", "phong xanh", "remove bg", "chromakey")
+  if (
+    norm.includes("xoa nen") ||
+    norm.includes("tach nen") ||
+    norm.includes("xoa phong") ||
+    norm.includes("phong xanh") ||
+    norm.includes("remove bg") ||
+    norm.includes("chromakey")
+  ) {
+    let updatedCode = currentCode;
+    let outResultName = "";
+    let isSuccess = false;
+
+    if (dir) {
+      try {
+        const found = await findMediaSourcePath(dir, _assets);
+        if (found && existsSync(found.path)) {
+          const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+          const assetsDir = join(dir, "assets");
+          await mkdir(assetsDir, { recursive: true });
+
+          const isVideoFile = /\.(mp4|mov|webm|mkv)$/i.test(found.path);
+
+          if (isVideoFile) {
+            // Video Green Screen / Chromakey
+            const outName = `${found.name.replace(/\.[^.]+$/, "")}_transparent.webm`;
+            const targetOut = join(assetsDir, outName);
+            const rootOut = join(dir, outName);
+
+            // Chromakey green screen into VP9 yuva420p transparent WebM
+            const filter = "chromakey=0x00FF00:0.25:0.05";
+            await execFileAsync(ffmpegBin, [
+              "-i", found.path,
+              "-vf", filter,
+              "-c:v", "libvpx-vp9",
+              "-pix_fmt", "yuva420p",
+              "-c:a", "libopus",
+              targetOut,
+              "-y",
+            ]);
+
+            try {
+              const bytes = await readFile(targetOut);
+              await writeFile(rootOut, bytes);
+            } catch {}
+
+            outResultName = outName;
+            isSuccess = true;
+
+            if (updatedCode.includes("<video")) {
+              updatedCode = updatedCode.replace(/(<video[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
+            }
+          } else {
+            // Image Background Removal (PNG with transparency)
+            const outName = `${found.name.replace(/\.[^.]+$/, "")}_nobg.png`;
+            const targetOut = join(assetsDir, outName);
+            const rootOut = join(dir, outName);
+
+            try {
+              await execFileAsync("rembg", ["i", found.path, targetOut]);
+            } catch {
+              // Colorkey fallback for solid background
+              await execFileAsync(ffmpegBin, [
+                "-i", found.path,
+                "-vf", "colorkey=0xFFFFFF:0.15:0.1",
+                "-c:v", "png",
+                targetOut,
+                "-y",
+              ]);
+            }
+
+            try {
+              const bytes = await readFile(targetOut);
+              await writeFile(rootOut, bytes);
+            } catch {}
+
+            outResultName = outName;
+            isSuccess = true;
+
+            if (updatedCode.includes("<image")) {
+              updatedCode = updatedCode.replace(/(<image[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[agent-bridge] error removing background:", err);
+      }
+    }
+
+    if (isSuccess) {
+      return {
+        explanation: `🪄 **Đã tách và xóa nền thành công (Offline 100%)!**\n\n- 🎞️ **Tệp trong suốt**: \`${outResultName}\`\n- 🟢 **Kênh Alpha Transparency**: Đã chuyển đổi nền sang dạng trong suốt (Transparent).\n- ⚡ **Xử lý cục bộ**: Không gửi dữ liệu lên server, không tiêu tốn credit Pro!`,
+        newCode: updatedCode,
+      };
+    } else {
+      return {
+        explanation: `🪄 **Đã sẵn sàng chức năng Xóa nền cục bộ:**\n- Hỗ trợ tách nền ảnh PNG trong suốt và video phông xanh (Chromakey) thành WebM Transparent.\n- Không cần tài khoản Pro!`,
+        newCode: currentCode,
+      };
+    }
+  }
+
+  // 6. Color Filter / Cinematic Color Grading ("chỉnh màu", "filter", "màu sắc", "vintage", "contrast")
   if (norm.includes("chinh mau") || norm.includes("filter") || norm.includes("mau sac") || norm.includes("color") || norm.includes("vintage")) {
     if (currentCode.includes("<video")) {
       let updatedCode = currentCode;

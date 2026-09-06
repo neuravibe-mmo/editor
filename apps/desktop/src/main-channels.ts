@@ -74,6 +74,8 @@ export const MAIN_CHANNELS = {
   // Media conversion and enhancement channels
   MEDIA_CONVERT_H264: "media:convert-h264",
   MEDIA_UPSCALE_SHARPEN: "media:upscale-sharpen",
+  MEDIA_REMOVE_BG_IMAGE: "media:remove-bg-image",
+  MEDIA_REMOVE_BG_VIDEO: "media:remove-bg-video",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -241,6 +243,32 @@ export type MainRequestMap = {
       inputPath: string;
       outputPath?: string;
       scale?: number;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      error?: string;
+    };
+  };
+  [MAIN_CHANNELS.MEDIA_REMOVE_BG_IMAGE]: {
+    request: {
+      inputPath: string;
+      outputPath?: string;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      error?: string;
+    };
+  };
+  [MAIN_CHANNELS.MEDIA_REMOVE_BG_VIDEO]: {
+    request: {
+      inputPath: string;
+      outputPath?: string;
+      mode?: "chromakey" | "colorkey" | "rvm";
+      keyColor?: string;
+      similarity?: number;
+      blend?: number;
     };
     response: {
       success: boolean;
