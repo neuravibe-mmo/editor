@@ -71,8 +71,9 @@ export const MAIN_CHANNELS = {
   AGENT_STATUS: "agent:status",
   AGENT_CHAT_SEND: "agent:chat:send",
 
-  // Media conversion channel
+  // Media conversion and enhancement channels
   MEDIA_CONVERT_H264: "media:convert-h264",
+  MEDIA_UPSCALE_SHARPEN: "media:upscale-sharpen",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -228,6 +229,18 @@ export type MainRequestMap = {
     request: {
       inputPath: string;
       outputPath?: string;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      error?: string;
+    };
+  };
+  [MAIN_CHANNELS.MEDIA_UPSCALE_SHARPEN]: {
+    request: {
+      inputPath: string;
+      outputPath?: string;
+      scale?: number;
     };
     response: {
       success: boolean;

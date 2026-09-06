@@ -117,7 +117,6 @@ export const CUSTOM_PRESET_OPTIONS: CaptionPresetOption[] = [
 
 /** 45 CapCut presets catalogue built directly from authentic style configurations */
 export const CAPCUT_PRESET_OPTIONS: CaptionPresetOption[] = Object.values(CAPCUT_PRESET_CONFIGS).map((config, index) => {
-  const isPro = index < 3;
   const slots: CaptionColorSlot[] = [];
 
   if (config.activeTextColor !== undefined && config.activeTextColor !== config.textColor) {
@@ -137,7 +136,7 @@ export const CAPCUT_PRESET_OPTIONS: CaptionPresetOption[] = Object.values(CAPCUT
     name: config.id as CaptionPresetName,
     label: config.name,
     thumbnail: `/presets/captions/preset_${String(index + 1).padStart(2, "0")}.webp`,
-    isPro,
+    isPro: false,
     category: "capcut",
     slots,
   };

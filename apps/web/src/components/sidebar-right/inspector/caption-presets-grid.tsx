@@ -17,14 +17,13 @@ type CaptionPresetsGridProps = {
 };
 
 export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
-  const [filter, setFilter] = createSignal<"all" | "custom" | "capcut" | "pro">("all");
+  const [filter, setFilter] = createSignal<"all" | "custom" | "capcut">("all");
 
   const filteredPresets = createMemo(() => {
     const custom = CUSTOM_PRESET_OPTIONS;
     const capcut = CAPCUT_PRESET_OPTIONS;
     if (filter() === "custom") return custom;
     if (filter() === "capcut") return capcut;
-    if (filter() === "pro") return capcut.filter((p) => p.isPro);
     return [...capcut, ...custom];
   });
 
@@ -71,69 +70,54 @@ export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
         >
           CapCut (45)
         </button>
-        <button
-          type="button"
-          class={cx(
-            "px-2 py-1 rounded-md font-medium transition-colors text-center flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap",
-            filter() === "pro"
-              ? "bg-purple-950/40 text-purple-300 shadow-xs border border-purple-500/40"
-              : "text-muted-foreground hover:text-purple-300"
-          )}
-          onClick={() => setFilter("pro")}
-        >
-          <span class="size-1.5 rounded-full bg-purple-400" />
-          <span>PRO (3)</span>
-        </button>
       </div>
 
       {/* Grid Container (CapCut 3-column layout) */}
       <div class="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto pr-1 py-1 scrollbar-thin scrollbar-thumb-border hover:scrollbar-thumb-border-strong">
-        {/* Reset / Default Item (Only show in "all" or "free") */}
-        <Show when={filter() !== "pro"}>
-          <button
-            type="button"
+        {/* Reset / Default Item */}
+        <button
+          type="button"
+          class={cx(
+            "aspect-square rounded-xl flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer relative group",
+            isResetActive()
+              ? "bg-[#07242B]/80 border-2 border-[#24D5FF] shadow-[0_0_10px_rgba(36,213,255,0.3)]"
+              : "bg-muted/15 border border-border/50 hover:border-border-strong hover:bg-muted/30"
+          )}
+          onClick={() => props.onSelect(DEFAULT_CAPTION_PRESET)}
+          title="Mặc định (Không hiệu ứng)"
+        >
+          <div
             class={cx(
-              "aspect-square rounded-xl flex flex-col items-center justify-center p-1.5 transition-all cursor-pointer relative group",
+              "size-7 rounded-full flex items-center justify-center mb-1 transition-colors",
               isResetActive()
-                ? "bg-[#07242B]/80 border-2 border-[#24D5FF] shadow-[0_0_10px_rgba(36,213,255,0.3)]"
-                : "bg-muted/15 border border-border/50 hover:border-border-strong hover:bg-muted/30"
+                ? "text-[#24D5FF] bg-[#24D5FF]/10"
+                : "text-muted-foreground group-hover:text-foreground"
             )}
-            onClick={() => props.onSelect(DEFAULT_CAPTION_PRESET)}
-            title="Mặc định (Không hiệu ứng)"
           >
-            <div
-              class={cx(
-                "size-7 rounded-full flex items-center justify-center mb-1 transition-colors",
-                isResetActive()
-                  ? "text-[#24D5FF] bg-[#24D5FF]/10"
-                  : "text-muted-foreground group-hover:text-foreground"
-              )}
+            {/* CapCut Circle-Slash Reset SVG */}
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             >
-              {/* CapCut Circle-Slash Reset SVG */}
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-              </svg>
-            </div>
-            <span
-              class={cx(
-                "text-[10px] font-medium tracking-tight truncate max-w-full",
-                isResetActive() ? "text-[#24D5FF]" : "text-muted-foreground"
-              )}
-            >
-              Mặc định
-            </span>
-          </button>
-        </Show>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+            </svg>
+          </div>
+          <span
+            class={cx(
+              "text-[10px] font-medium tracking-tight truncate max-w-full",
+              isResetActive() ? "text-[#24D5FF]" : "text-muted-foreground"
+            )}
+          >
+            Mặc định
+          </span>
+        </button>
 
         {/* 45 CapCut Presets Cards */}
         <For each={filteredPresets()}>
@@ -159,13 +143,6 @@ export function CaptionPresetsGrid(props: CaptionPresetsGridProps) {
                   loading="lazy"
                   draggable={false}
                 />
-
-                {/* PRO Badge */}
-                <Show when={preset.isPro}>
-                  <div class="absolute top-1 left-1 px-1 py-0.5 rounded-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-[8px] font-extrabold text-white leading-none shadow-xs uppercase tracking-tighter flex items-center gap-0.5">
-                    <span>PRO</span>
-                  </div>
-                </Show>
 
                 {/* Custom Preset Badge */}
                 <Show when={preset.category === "custom"}>

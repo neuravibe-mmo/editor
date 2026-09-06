@@ -316,6 +316,51 @@ if (app.requestSingleInstanceLock()) {
       }
     }
   });
+
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_UPSCALE_SHARPEN, async ({ inputPath, outputPath, scale = 2 }) => {
+    const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+    const dir = dirname(inputPath);
+    const ext = extname(inputPath);
+    const base = basename(inputPath, ext);
+    const targetOut = outputPath || join(dir, `${base}_sharpened.mp4`);
+
+    // High quality upscale filter using lanczos scaling + unsharp mask filter
+    const filter = `scale=iw*${scale}:ih*${scale}:flags=lanczos,unsharp=5:5:1.0:5:5:0.0`;
+
+    try {
+      await execFileAsync(ffmpegBin, [
+        "-i", inputPath,
+        "-vf", filter,
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        targetOut,
+        "-y",
+      ]);
+      return { success: true, outputPath: targetOut };
+    } catch (err) {
+      try {
+        const tmpOut = join("/tmp", `${base}_sharpened_${Date.now()}.mp4`);
+        await execFileAsync(ffmpegBin, [
+          "-i", inputPath,
+          "-vf", filter,
+          "-c:v", "libx264",
+          "-preset", "fast",
+          "-crf", "18",
+          "-pix_fmt", "yuv420p",
+          "-c:a", "copy",
+          tmpOut,
+          "-y",
+        ]);
+        return { success: true, outputPath: tmpOut };
+      } catch (err2) {
+        console.error("[media-upscale-sharpen] ffmpeg failed:", err2);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  });
   mainBridge.handle(MAIN_CHANNELS.WINDOW_IS_FULLSCREEN, () => mainWindow?.isFullScreen() ?? false);
   mainBridge.handle(MAIN_CHANNELS.WINDOW_CAPTURE, async () => {
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("No main window");
