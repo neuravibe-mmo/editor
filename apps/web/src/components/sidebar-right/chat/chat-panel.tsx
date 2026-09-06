@@ -89,7 +89,6 @@ export function ChatPanel() {
   };
 
   const quickActions = [
-    { label: "🚀 Xuất video", action: handleExport },
     { label: "🎨 Sinh ảnh AI", prompt: "Sinh ảnh AI: một phong cảnh thiên nhiên tuyệt đẹp hùng vĩ lúc hoàng hôn, 8k siêu thực" },
     { label: "🎙️ Lồng tiếng AI", prompt: "Lồng tiếng cho video: Xin chào bạn, chào mừng bạn đã đến với video hôm nay!" },
     { label: "💎 Nâng cấp độ nét", prompt: "Nâng cấp độ nét và khử mờ cho video" },
@@ -176,21 +175,16 @@ export function ChatPanel() {
             <For each={quickActions}>
               {(action, index) => (
                 <>
-                  <Show when={index() === 1 || index() === 5 || index() === 7}>
+                  <Show when={index() === 4 || index() === 6}>
                     <DropdownMenuSeparator class="my-1 bg-border/50" />
                   </Show>
                   <DropdownMenuItem
                     class="h-8 text-xs px-2.5 gap-2 cursor-pointer hover:bg-primary/15 hover:text-primary rounded-md transition-colors"
                     onSelect={() => {
-                      if (action.action) {
-                        action.action();
-                      } else if (action.prompt) {
-                        sendMessage(action.prompt);
-                      }
+                      sendMessage(action.prompt);
                     }}
                   >
-                    <span class="text-sm shrink-0">{action.label.split(" ")[0]}</span>
-                    <span class="truncate font-medium">{action.label.split(" ").slice(1).join(" ")}</span>
+                    <span>{action.label}</span>
                   </DropdownMenuItem>
                 </>
               )}

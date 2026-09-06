@@ -39,6 +39,41 @@ export function AppContextMenu(props: { children: JSX.Element }) {
     }
   }
 
+  const handleDelete = () => {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLElement && active.isContentEditable)
+    ) {
+      document.execCommand("delete");
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+      document.execCommand("delete");
+      return;
+    }
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Backspace",
+        code: "Backspace",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    window.dispatchEvent(
+      new KeyboardEvent("keyup", {
+        key: "Backspace",
+        code: "Backspace",
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  };
+
   const handleSelectAll = () => {
     document.execCommand("selectAll")
   }
@@ -83,6 +118,10 @@ export function AppContextMenu(props: { children: JSX.Element }) {
           <ContextMenuItem onSelect={handlePaste}>
             Paste
             <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={handleDelete}>
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuItem onSelect={handleSelectAll}>
             Select All
