@@ -5,7 +5,7 @@
 import { app, BrowserWindow, nativeImage, session, shell } from "electron";
 import { basename, dirname, extname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { mkdir, open, unlink } from "node:fs/promises";
+import { mkdir, open, unlink, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -417,6 +417,74 @@ if (app.requestSingleInstanceLock()) {
     } catch (err) {
       console.error("[media-remove-bg-video] failed:", err);
       return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  // Edge-TTS Voice Generation (Neural TTS, Vietnamese HoaiMy / NamMinh)
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_TTS, async ({ text, voice = "vi-VN-HoaiMyNeural", outputPath, rate, volume }) => {
+    const targetOut = outputPath || join("/tmp", `tts_${Date.now()}.mp3`);
+    const edgeTtsBin = existsSync("/Library/Frameworks/Python.framework/Versions/3.13/bin/edge-tts")
+      ? "/Library/Frameworks/Python.framework/Versions/3.13/bin/edge-tts"
+      : "edge-tts";
+
+    const args = ["--text", text, "--voice", voice, "--write-media", targetOut];
+    if (rate) args.push("--rate", rate);
+    if (volume) args.push("--volume", volume);
+
+    try {
+      await execFileAsync(edgeTtsBin, args);
+      return { success: true, outputPath: targetOut };
+    } catch (err) {
+      // Fallback to macOS native `say` command
+      try {
+        const aiffOut = targetOut.replace(/\.[^.]+$/, ".aiff");
+        const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+        await execFileAsync("/usr/bin/say", ["-v", "Linh", "-o", aiffOut, text]);
+        await execFileAsync(ffmpegBin, ["-i", aiffOut, targetOut, "-y"]);
+        await unlink(aiffOut).catch(() => {});
+        return { success: true, outputPath: targetOut };
+      } catch (err2) {
+        console.error("[media-tts] edge-tts & say failed:", err, err2);
+        return { success: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  });
+
+  // Free AI Image Generation via Pollinations AI (FLUX.1 / Turbo)
+  mainBridge.handle(MAIN_CHANNELS.MEDIA_GENERATE_IMAGE, async ({ prompt, aspectRatio = "16:9", outputPath, seed }) => {
+    try {
+      const dimensions: Record<string, { width: number; height: number }> = {
+        "16:9": { width: 1920, height: 1080 },
+        "9:16": { width: 1080, height: 1920 },
+        "1:1": { width: 1080, height: 1080 },
+        "4:3": { width: 1440, height: 1080 },
+        "3:4": { width: 1080, height: 1440 },
+      };
+      const dim = dimensions[aspectRatio] || { width: 1920, height: 1080 };
+      const actualSeed = seed ?? Math.floor(Math.random() * 1000000);
+      const encodedPrompt = encodeURIComponent(prompt.trim());
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dim.width}&height=${dim.height}&model=flux&nologo=true&seed=${actualSeed}`;
+
+      const res = await fetch(imageUrl);
+      if (!res.ok) {
+        throw new Error(`Pollinations HTTP error: ${res.status} ${res.statusText}`);
+      }
+
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const targetOut = outputPath || join("/tmp", `ai_image_${Date.now()}.jpg`);
+      await writeFile(targetOut, buffer);
+
+      return {
+        success: true,
+        outputPath: targetOut,
+        url: imageUrl,
+      };
+    } catch (err) {
+      console.error("[media-generate-image] failed:", err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   });
 

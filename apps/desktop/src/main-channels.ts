@@ -76,6 +76,8 @@ export const MAIN_CHANNELS = {
   MEDIA_UPSCALE_SHARPEN: "media:upscale-sharpen",
   MEDIA_REMOVE_BG_IMAGE: "media:remove-bg-image",
   MEDIA_REMOVE_BG_VIDEO: "media:remove-bg-video",
+  MEDIA_TTS: "media:tts",
+  MEDIA_GENERATE_IMAGE: "media:generate-image",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -273,6 +275,35 @@ export type MainRequestMap = {
     response: {
       success: boolean;
       outputPath?: string;
+      error?: string;
+    };
+  };
+  [MAIN_CHANNELS.MEDIA_TTS]: {
+    request: {
+      text: string;
+      voice?: string;
+      outputPath?: string;
+      rate?: string;
+      volume?: string;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      error?: string;
+    };
+  };
+  [MAIN_CHANNELS.MEDIA_GENERATE_IMAGE]: {
+    request: {
+      prompt: string;
+      aspectRatio?: string;
+      outputPath?: string;
+      seed?: number;
+      model?: string;
+    };
+    response: {
+      success: boolean;
+      outputPath?: string;
+      url?: string;
       error?: string;
     };
   };

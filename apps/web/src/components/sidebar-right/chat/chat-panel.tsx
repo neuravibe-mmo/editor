@@ -83,6 +83,8 @@ export function ChatPanel() {
 
   const quickActions = [
     { label: "🚀 Xuất video", action: handleExport },
+    { label: "🎨 Sinh ảnh AI", prompt: "Sinh ảnh AI: một phong cảnh thiên nhiên tuyệt đẹp hùng vĩ lúc hoàng hôn, 8k siêu thực" },
+    { label: "🎙️ Lồng tiếng AI", prompt: "Lồng tiếng cho video: Xin chào bạn, chào mừng bạn đã đến với video hôm nay!" },
     { label: "💎 Nâng cấp độ nét", prompt: "Nâng cấp độ nét và khử mờ cho video" },
     { label: "🪄 Xóa nền / Phông xanh", prompt: "Xóa nền cho video/ảnh của tôi" },
     { label: "🎵 Thêm nhạc nền", prompt: "Tìm các đoạn nhạc background hay để thêm vào video cho tôi" },

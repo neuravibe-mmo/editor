@@ -428,18 +428,39 @@ export class EditorGenAi extends GenAi {
     switch (spec.type) {
       case "image": {
         return (async () => {
-          const images = spec.refIds.length > 0
-            ? await Promise.all(spec.refIds.map((id) => this.uploadInput(id)))
-            : undefined;
+          try {
+            const images = spec.refIds.length > 0
+              ? await Promise.all(spec.refIds.map((id) => this.uploadInput(id)))
+              : undefined;
 
-          return await trpc.generateImage.mutate({
-            model: spec.model,
-            prompt: spec.prompt,
-            aspectRatio: spec.aspectRatio,
-            count: 1,
-            seed: spec.seed,
-            images,
-          });
+            return await trpc.generateImage.mutate({
+              model: spec.model,
+              prompt: spec.prompt,
+              aspectRatio: spec.aspectRatio,
+              count: 1,
+              seed: spec.seed,
+              images,
+            });
+          } catch (cloudErr) {
+            console.warn("[gen-ai] Cloud generateImage failed or requires Pro, using free Pollinations FLUX engine:", cloudErr);
+            const dims: Record<string, { width: number; height: number }> = {
+              "16:9": { width: 1920, height: 1080 },
+              "9:16": { width: 1080, height: 1920 },
+              "1:1": { width: 1080, height: 1080 },
+              "4:3": { width: 1440, height: 1080 },
+              "3:4": { width: 1080, height: 1440 },
+            };
+            const dim = dims[spec.aspectRatio] ?? { width: 1920, height: 1080 };
+            const seed = spec.seed ?? Math.floor(Math.random() * 1000000);
+            const encoded = encodeURIComponent(spec.prompt);
+            const freeUrl = `https://image.pollinations.ai/prompt/${encoded}?width=${dim.width}&height=${dim.height}&model=flux&nologo=true&seed=${seed}`;
+
+            return {
+              name: `ai_${spec.prompt.slice(0, 20).replace(/[^a-z0-9]/gi, "_")}.jpg`,
+              results: [{ url: freeUrl }],
+              generationId: `pollinations_${Date.now()}`,
+            };
+          }
         })();
       }
       case "video": {
