@@ -11,6 +11,13 @@ import { useWorld } from "@diffusionstudio/koota-solid";
 import { getActiveEntity } from "@diffusionstudio/runtime";
 import { getDefaultExportTemplate } from "@/components/sidebar-right/inspector/export-templates";
 import { toast } from "somoto";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export function ChatPanel() {
   const {
@@ -149,25 +156,69 @@ export function ChatPanel() {
         </div>
       </div>
 
-      {/* Quick Action Chips */}
-      <div class="px-2.5 py-2 border-b border-border/50 bg-background/20 flex gap-1.5 overflow-x-auto no-scrollbar shrink-0">
-        <For each={quickActions}>
-          {(action) => (
-            <button
-              class="text-[11px] whitespace-nowrap px-2.5 py-1 rounded-lg bg-muted/40 hover:bg-primary/20 hover:text-primary hover:border-primary/40 border border-border text-muted-foreground transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer"
-              disabled={isBusy()}
-              onClick={() => {
-                if (action.action) {
-                  action.action();
-                } else if (action.prompt) {
-                  sendMessage(action.prompt);
-                }
-              }}
-            >
-              {action.label}
-            </button>
-          )}
-        </For>
+      {/* Action Toolbar / Dropdown Menu */}
+      <div class="px-2.5 py-1.5 border-b border-border/50 bg-background/30 flex items-center justify-between gap-2 shrink-0">
+        {/* Quick Launch Dropdown */}
+        <DropdownMenu placement="bottom-start">
+          <DropdownMenuTrigger
+            as={Button}
+            variant="outline"
+            size="sm"
+            class="h-7 text-[11px] gap-1.5 px-2.5 bg-muted/40 hover:bg-muted font-medium border-border/80 text-foreground shadow-xs"
+            disabled={isBusy()}
+          >
+            <Icon name="sparkles" class="size-3.5 text-primary" />
+            <span>Công cụ AI & Tác vụ</span>
+            <Icon name="chevron-down" class="size-3 text-muted-foreground ml-0.5" />
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent class="w-56 bg-popover/95 backdrop-blur-md border-border p-1 shadow-xl z-50">
+            <For each={quickActions}>
+              {(action, index) => (
+                <>
+                  <Show when={index() === 1 || index() === 5 || index() === 7}>
+                    <DropdownMenuSeparator class="my-1 bg-border/50" />
+                  </Show>
+                  <DropdownMenuItem
+                    class="h-8 text-xs px-2.5 gap-2 cursor-pointer hover:bg-primary/15 hover:text-primary rounded-md transition-colors"
+                    onSelect={() => {
+                      if (action.action) {
+                        action.action();
+                      } else if (action.prompt) {
+                        sendMessage(action.prompt);
+                      }
+                    }}
+                  >
+                    <span class="text-sm shrink-0">{action.label.split(" ")[0]}</span>
+                    <span class="truncate font-medium">{action.label.split(" ").slice(1).join(" ")}</span>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </For>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Top Direct Shortcuts for rapid 1-click execution */}
+        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <button
+            class="text-[11px] whitespace-nowrap px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer font-medium flex items-center gap-1"
+            disabled={isBusy()}
+            onClick={() => sendMessage("Sinh ảnh AI: một phong cảnh thiên nhiên tuyệt đẹp hùng vĩ lúc hoàng hôn, 8k siêu thực")}
+            title="Sinh ảnh AI ngay lập tức"
+          >
+            <span>🎨</span>
+            <span>Sinh ảnh</span>
+          </button>
+          <button
+            class="text-[11px] whitespace-nowrap px-2 py-1 rounded-md bg-muted/40 hover:bg-primary/20 hover:text-primary hover:border-primary/40 border border-border text-muted-foreground transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+            disabled={isBusy()}
+            onClick={handleExport}
+            title="Xuất video ngay"
+          >
+            <span>🚀</span>
+            <span>Xuất</span>
+          </button>
+        </div>
       </div>
 
       {/* Message Feed */}
