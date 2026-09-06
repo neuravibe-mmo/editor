@@ -3,143 +3,35 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
-import { MAIN_CHANNELS } from "./main-channels";
-
-const execFileAsync = promisify(execFile);
-
-/**
- * Helper to find the primary video/audio source path in a project
- */
-export async function findMediaSourcePath(dir: string, assets: unknown[]): Promise<{ path: string; name: string } | null> {
-  if (Array.isArray(assets) && assets.length > 0) {
-    for (const item of assets) {
-      const a = item as Record<string, unknown>;
-      if (a && (a.type === "VIDEO" || a.type === "AUDIO")) {
-        if (typeof a.source === "string" && existsSync(a.source)) {
-          return { path: a.source, name: typeof a.path === "string" ? a.path : "video" };
-        }
-        if (typeof a.path === "string") {
-          const direct = join(dir, a.path);
-          if (existsSync(direct)) {
-            return { path: direct, name: a.path };
-          }
-          const inAssets = join(dir, "assets", a.path);
-          if (existsSync(inAssets)) {
-            return { path: inAssets, name: a.path };
-          }
-        }
-      }
-    }
-  }
-
-  try {
-    const files = await readdir(dir);
-    for (const f of files) {
-      if (/\.(mp4|mov|webm|mkv|wav|mp3|m4a|aac)$/i.test(f)) {
-        return { path: join(dir, f), name: f };
-      }
-    }
-  } catch {}
-
-  return null;
-}
-
-/**
- * Transcribes project media dynamically using local Whisper.cpp and ffmpeg.
- */
-async function transcribeProjectMedia(dir: string, assets: unknown[]): Promise<{ srt: string; json?: string; mediaName: string } | null> {
-  const found = await findMediaSourcePath(dir, assets);
-  if (!found) return null;
-  const mediaSourcePath = found.path;
-  const mediaName = found.name;
-
-  const whisperBin = existsSync("/opt/homebrew/bin/whisper-cli") ? "/opt/homebrew/bin/whisper-cli" : "whisper-cli";
-  const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
-  const modelPath = join(process.env.HOME ?? "", ".cache", "whisper", "ggml-base.bin");
-
-  if (!existsSync(modelPath)) return null;
-
-  const tempId = Date.now();
-  const tempWav = `/tmp/ds_ai_${tempId}.wav`;
-  const tempPrefix = `/tmp/ds_ai_${tempId}_captions`;
-
-  try {
-    await execFileAsync(ffmpegBin, ["-i", mediaSourcePath, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", tempWav, "-y"]);
-    await execFileAsync(whisperBin, ["-m", modelPath, "-f", tempWav, "-osrt", "-ojf", "-of", tempPrefix, "-l", "auto"]);
-
-    const generatedSrt = `${tempPrefix}.srt`;
-    const generatedJson = `${tempPrefix}.json`;
-    let srtText = "";
-    let jsonText = "";
-
-    if (existsSync(generatedSrt)) {
-      srtText = await readFile(generatedSrt, "utf8");
-    }
-
-    if (existsSync(generatedJson)) {
-      try {
-        const raw = JSON.parse(await readFile(generatedJson, "utf8"));
-        const segments = raw.transcription || [];
-        const transcript = [];
-        for (const seg of segments) {
-          const words: Array<{ text: string; start: number; end: number }> = [];
-          const tokens = seg.tokens || [];
-          for (const t of tokens) {
-            const rawText = t.text || "";
-            if (!rawText || rawText.startsWith("[_") || rawText.endsWith("_]")) continue;
-            const isStartOfWord = rawText.startsWith(" ") || words.length === 0;
-            const clean = rawText.trim();
-            if (!clean) continue;
-            const start = (t.offsets?.from ?? 0) / 1000;
-            const end = (t.offsets?.to ?? 0) / 1000;
-            if (isStartOfWord || words.length === 0) {
-              words.push({ text: clean, start, end });
-            } else {
-              const last = words[words.length - 1];
-              last.text += clean;
-              last.end = Math.max(last.end, end);
-            }
-          }
-          if (words.length > 0) {
-            transcript.push({
-              text: (seg.text || "").trim(),
-              words,
-            });
-          }
-        }
-        if (transcript.length > 0) {
-          jsonText = JSON.stringify(transcript, null, 2);
-        }
-      } catch (e) {
-        console.warn("[agent-bridge] error parsing whisper json:", e);
-      }
-    }
-
-    if (srtText || jsonText) {
-      return { srt: srtText, json: jsonText, mediaName };
-    }
-  } catch (err) {
-    console.error("[agent-bridge] Transcription failed:", err);
-  } finally {
-    try {
-      if (existsSync(tempWav)) await rm(tempWav, { force: true });
-      const generatedSrt = `${tempPrefix}.srt`;
-      if (existsSync(generatedSrt)) await rm(generatedSrt, { force: true });
-      const generatedJson = `${tempPrefix}.json`;
-      if (existsSync(generatedJson)) await rm(generatedJson, { force: true });
-    } catch {}
-  }
-
-  return null;
-}
 import { mainBridge } from "./main-manager";
 import { markSelfWrite } from "./projects";
+import { MAIN_CHANNELS } from "./main-channels";
 import type { BrowserWindow } from "electron";
+
+import { findMediaSourcePath } from "./agent/transcription";
+import { pickLocalAudioTrack, LOCAL_AUDIOS_DIR } from "./agent/audio-picker";
+import {
+  handleVoiceoverAction,
+  handleImageGenAction,
+  handleUpscaleAction,
+  handleRemoveBgAction,
+  handleCaptionsAction,
+  type ActionResult,
+} from "./agent/ai-actions";
+import {
+  handleTrimVideo,
+  handleZoomEffect,
+  handleFadeEffect,
+  handleAddText,
+  handleColorGrade,
+  handleCompositeEffects,
+  handleResetOriginal,
+} from "./agent/timeline-modifiers";
+
+export { findMediaSourcePath };
 
 export interface AgentStatus {
   connected: boolean;
@@ -171,10 +63,9 @@ export async function handleAgentChat(
 ): Promise<{ ok: boolean; messageId: string }> {
   const { id, dir, prompt, currentTime } = req;
 
-  // Run asynchronously so UI remains responsive and receives events
+  // Run asynchronously so UI remains responsive and receives streaming events
   (async () => {
     try {
-      // 1. Emit status: analyzing
       emitEvent(window, {
         id,
         type: "status",
@@ -201,17 +92,15 @@ export async function handleAgentChat(
         manifestAssets = [];
       }
 
-      // 2. Emit status: thinking
       emitEvent(window, {
         id,
         type: "status",
         statusText: "Antigravity Ultra đang áp dụng lệnh chỉnh sửa...",
       });
 
-      // 3. Process prompt to generate new JSX and explanation
+      // Process natural language instruction through modular agents
       const result = await processVideoEditPrompt(prompt, currentCode, manifestAssets, currentTime, dir);
 
-      // If code was modified, write to index.tsx immediately
       if (result.newCode && result.newCode !== currentCode) {
         emitEvent(window, {
           id,
@@ -222,14 +111,12 @@ export async function handleAgentChat(
         markSelfWrite(dir, "index.tsx");
         await writeFile(indexPath, result.newCode, "utf8");
 
-        // Notify watcher and mainBridge
         mainBridge.emit(window, MAIN_CHANNELS.PROJECTS_CHANGED, {
           dir,
           path: "index.tsx",
         });
       }
 
-      // 4. Stream final text chunk and done event
       emitEvent(window, {
         id,
         type: "chunk",
@@ -271,11 +158,6 @@ function emitEvent(
   mainBridge.emit(window, MAIN_CHANNELS.AGENT_CHAT_EVENT, event);
 }
 
-interface ProcessResult {
-  explanation: string;
-  newCode?: string;
-}
-
 /** Remove Vietnamese diacritics for robust intent detection */
 function removeDiacritics(str: string): string {
   return str
@@ -285,15 +167,6 @@ function removeDiacritics(str: string): string {
     .replace(/Đ/g, "D")
     .toLowerCase()
     .trim();
-}
-
-const LOCAL_AUDIOS_DIR = "/Users/hoangkien/Project/editor/assets/audios";
-
-interface LocalAudioTrack {
-  filename: string;
-  title: string;
-  author?: string;
-  style: string;
 }
 
 function extractMediaTiming(code: string): { start?: number; end?: number; sourceIn?: number; sourceOut?: number } {
@@ -317,665 +190,78 @@ function extractMediaTiming(code: string): { start?: number; end?: number; sourc
   return {};
 }
 
-async function pickLocalAudioTrack(norm: string): Promise<LocalAudioTrack> {
-  const audiosDir = existsSync(LOCAL_AUDIOS_DIR)
-    ? LOCAL_AUDIOS_DIR
-    : join(process.cwd(), "assets/audios");
-
-  try {
-    const jsonPath = join(audiosDir, "tiktok_music.json");
-    if (existsSync(jsonPath)) {
-      const list: Array<{ id: number | string; type?: string; musicTitle?: string; musicAuthor?: string }> = JSON.parse(
-        await readFile(jsonPath, "utf8"),
-      );
-      const availableFiles = new Set(await readdir(audiosDir));
-      const validTracks = list.filter((item) => availableFiles.has(`${item.id}.mp3`));
-
-      if (validTracks.length > 0) {
-        let pool = validTracks;
-        let style = "Acoustic / Giai điệu nhẹ nhàng";
-
-        if (
-          norm.includes("chill") ||
-          norm.includes("lofi") ||
-          norm.includes("nhe nhang") ||
-          norm.includes("thu gian") ||
-          norm.includes("slow")
-        ) {
-          const instrum = pool.filter((t) => t.type === "INSTRUM");
-          if (instrum.length > 0) pool = instrum;
-          style = "Lo-Fi Chill & Thư Giãn";
-        } else if (
-          norm.includes("vui") ||
-          norm.includes("soi dong") ||
-          norm.includes("nhanh") ||
-          norm.includes("remix") ||
-          norm.includes("pop")
-        ) {
-          const upbeat = pool.filter((t) => (t.musicTitle || "").toLowerCase().includes("remix") || t.type === "VOCAL");
-          if (upbeat.length > 0) pool = upbeat;
-          style = "Sôi Động & Hiện Đại";
-        } else {
-          const instrum = pool.filter((t) => t.type === "INSTRUM");
-          if (instrum.length > 0) pool = instrum;
-          style = "Nhạc nền không lời (Instrumental)";
-        }
-
-        const chosen = pool[Math.floor(Math.random() * pool.length)];
-        return {
-          filename: `${chosen.id}.mp3`,
-          title: chosen.musicTitle || "Bản nhạc nền",
-          author: chosen.musicAuthor,
-          style,
-        };
-      }
-    }
-  } catch (err) {
-    console.warn("[agent-bridge] error loading local audios:", err);
-  }
-
-  // Fallback: pick any available mp3 from audiosDir
-  try {
-    const allFiles = (await readdir(audiosDir)).filter((f) => f.endsWith(".mp3"));
-    if (allFiles.length > 0) {
-      const chosenFile = allFiles[Math.floor(Math.random() * allFiles.length)];
-      return {
-        filename: chosenFile,
-        title: chosenFile.replace(".mp3", ""),
-        style: "Nhạc nền tuyển chọn",
-      };
-    }
-  } catch {}
-
-  return {
-    filename: "bg_music.mp3",
-    title: "Nhạc nền",
-    style: "Giai điệu nhẹ nhàng",
-  };
-}
-
 /**
- * Core processor for video editing prompts.
+ * Core Router for user editing prompts.
  */
 async function processVideoEditPrompt(
   prompt: string,
   currentCode: string,
-  _assets: unknown[],
-  currentTime?: number | null,
+  assets: unknown[],
+  _currentTime?: number | null,
   dir?: string,
-): Promise<ProcessResult> {
+): Promise<ActionResult> {
   const norm = removeDiacritics(prompt);
 
-  // 1. All-in-one / Composite Effects ("thêm các hiệu ứng", "làm đẹp", "auto edit", "hiệu ứng")
-  const isAllEffects =
+  // 1. All-in-one / Composite Effects
+  if (
     norm.includes("hieu ung") ||
     norm.includes("effect") ||
     norm.includes("lam dep") ||
     norm.includes("sinh dong") ||
-    norm.includes("nang cap") ||
-    norm.includes("chuyen nghiep") ||
     norm.includes("cinematic") ||
-    norm.includes("toan dien") ||
-    (norm.includes("chinh sua") && !norm.includes("cat") && !norm.includes("xoa"));
-
-  if (isAllEffects) {
-    if (currentCode.includes("<video")) {
-      let updatedCode = currentCode;
-
-      // Clean old tracks if present
-      updatedCode = updatedCode.replace(/<keyframeTrack[\s\S]*?<\/keyframeTrack>/g, "");
-
-      const compositeTracks = `
-          <keyframeTrack property="scale">
-            <keyframe time={0} value={1} easing="easeInOut" />
-            <keyframe time={3.5} value={1.18} />
-          </keyframeTrack>
-          <keyframeTrack property="opacity">
-            <keyframe time={0} value={1} />
-            <keyframe time={8.5} value={1} />
-            <keyframe time={10.7} value={0} easing="easeIn" />
-          </keyframeTrack>`;
-
-      const introTitle = `
-        <text
-          x={50}
-          y={200}
-          fontSize={44}
-          fontWeight="bold"
-          color="#FFFFFF"
-          fontFamily="Inter"
-          start={0}
-          end={4}
-        >
-          ✨ Cinematic Moments
-          <shadow color="#000000" blur={16} offsetY={4} />
-        </text>`;
-
-      if (updatedCode.includes("/>")) {
-        updatedCode = updatedCode.replace(/(<video[^>]*?)\/>/, `$1>${compositeTracks}\n          </video>`);
-      } else if (updatedCode.includes("</video>")) {
-        updatedCode = updatedCode.replace("</video>", `${compositeTracks}\n          </video>`);
-      }
-
-      if (!updatedCode.includes("<text") && updatedCode.includes("</scene>")) {
-        updatedCode = updatedCode.replace("</scene>", `${introTitle}\n      </scene>`);
-      }
-
-      return {
-        explanation: `🎬 **Đã áp dụng trọn bộ hiệu ứng Cinematic!**\n\n1. 🔍 **Zoom In Cinematic**: Phóng to nhẹ nhàng từ **1.0x -> 1.18x** trong 3.5s đầu.\n2. 📝 **Intro Title**: Tiêu đề *"✨ Cinematic Moments"* nổi bật với bóng đổ.\n3. ✨ **Fade Out**: Mờ dần kết thúc êm ái ở cuối clip.\n\n👉 Bấm nút **Play (Space)** hoặc kéo thanh thời gian để xem chuyển động!`,
-        newCode: updatedCode,
-      };
-    }
+    norm.includes("toan dien")
+  ) {
+    const res = handleCompositeEffects(currentCode);
+    if (res) return res;
   }
 
-  // 2. Audio Cut / Delete / Mute ("xóa nhạc", "cắt nhạc nền từ giây thứ 9", "bỏ nhạc", "tắt âm thanh")
-  const isCutOrDelete =
-    norm.includes("xoa") ||
-    norm.includes("cat") ||
-    norm.includes("bo") ||
-    norm.includes("tat") ||
-    norm.includes("mute") ||
-    norm.includes("giam") ||
-    norm.includes("remove") ||
-    norm.includes("delete") ||
-    norm.includes("trim") ||
-    norm.includes("cut");
-
-  const isCaptionOrSub =
-    norm.includes("phu de") ||
-    norm.includes("caption") ||
-    norm.includes("sub") ||
-    norm.includes("transcribe") ||
-    norm.includes("loi thoai");
-
-  const isAudioMusic =
-    !isCaptionOrSub &&
-    (norm.includes("nhac") ||
-      norm.includes("music") ||
-      norm.includes("bgm") ||
-      norm.includes("bai hat") ||
-      norm.includes("soundtrack") ||
-      (norm.includes("am thanh") &&
-        (norm.includes("them") || norm.includes("chen") || norm.includes("background") || norm.includes("tat") || norm.includes("xoa") || norm.includes("cat"))));
-
-  // Handle DELETE / TRIM AUDIO first
-  if (isAudioMusic && isCutOrDelete) {
-    const numbers = (prompt.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-    let updatedCode = currentCode;
-
-    if (numbers.length > 0) {
-      const cutTime = numbers[0];
-
-      // "xoa nhac tu giay thu 9 di" / "tu giay 9" / "sau giay 9" / "tu 9s" -> keep 0 to cutTime
-      if (
-        norm.includes("tu giay") ||
-        norm.includes("sau") ||
-        norm.includes("tu") ||
-        norm.includes("di") ||
-        norm.includes("tro di") ||
-        norm.includes("den cuoi") ||
-        norm.includes("cuoi")
-      ) {
-        if (updatedCode.includes("<audio")) {
-          if (updatedCode.includes("end={")) {
-            updatedCode = updatedCode.replace(/(<audio[^>]*?)end=\{[^}]+\}/, `$1end={${cutTime}}`);
-          } else {
-            updatedCode = updatedCode.replace(/<audio\b/, `<audio end={${cutTime}}`);
-          }
-
-          return {
-            explanation: `✂️ **Đã cắt nhạc nền từ giây thứ ${cutTime}!**\n- 🎵 **Thời lượng nhạc**: Giữ lại phát từ **0s** đến **${cutTime}s** (dừng lại tại mốc ${cutTime} giây theo yêu cầu).\n- ⚡ **Timeline**: Đã tự động cập nhật lại track nhạc nền trên giao diện.`,
-            newCode: updatedCode,
-          };
-        } else {
-          return {
-            explanation: `ℹ️ **Không tìm thấy track nhạc nền (\`<audio>\`) nào trong timeline để cắt.**\nBạn có thể thêm nhạc nền trước bằng cách gõ: *"Thêm nhạc nền phù hợp"*.`,
-            newCode: currentCode,
-          };
-        }
-      } else if (norm.includes("dau")) {
-        // "xoa 9s dau cua nhac" -> start at cutTime
-        if (updatedCode.includes("<audio")) {
-          if (updatedCode.includes("start={")) {
-            updatedCode = updatedCode.replace(/(<audio[^>]*?)start=\{[^}]+\}/, `$1start={${cutTime}}`);
-          } else {
-            updatedCode = updatedCode.replace(/<audio\b/, `<audio start={${cutTime}}`);
-          }
-
-          return {
-            explanation: `✂️ **Đã xóa ${cutTime} giây đầu của nhạc nền!**\n- 🎵 Nhạc nền sẽ bắt đầu phát từ mốc **${cutTime}s** trở đi.`,
-            newCode: updatedCode,
-          };
-        }
-      }
-    }
-
-    // Completely remove background music if no specific time or general "xoa nhac"
-    if (updatedCode.includes("<audio") || updatedCode.includes("bgMusic")) {
-      updatedCode = updatedCode.replace(/<audio\b[\s\S]*?\/>\s*/g, "");
-      updatedCode = updatedCode.replace(/const\s+bgMusic\s*=\s*generate\.audio\([\s\S]*?\);\n*/g, "");
-
-      return {
-        explanation: `🗑️ **Đã xóa toàn bộ nhạc nền khỏi timeline!**\n- Đã loại bỏ track \`<audio>\` và mã khởi tạo nhạc nền khỏi dự án.`,
-        newCode: updatedCode,
-      };
-    } else {
-      return {
-        explanation: `ℹ️ **Timeline hiện tại chưa có track nhạc nền nào để xóa.**`,
-        newCode: currentCode,
-      };
-    }
-  }
-
-  // 3. Audio / Background Music / Soundtracks ("tìm nhạc background", "thêm nhạc", "nhạc nền", "music", "audio")
-  if (isAudioMusic && !isCutOrDelete) {
-    const chosenTrack = await pickLocalAudioTrack(norm);
-    let updatedCode = currentCode;
-
-    // Clean up any cloud generate.audio references to avoid Pro popup
-    updatedCode = updatedCode.replace(/import\s*\{\s*generate[\s\S]*?\}\s*from\s*["']@diffusionstudio\/jsx["'];?/g, "");
-    updatedCode = updatedCode.replace(/const\s+bgMusic\s*=\s*generate\.audio\([\s\S]*?\);\n?/g, "");
-    updatedCode = updatedCode.replace(/<audio\b[\s\S]*?\/>/g, "");
-
-    if (dir) {
-      const assetsDir = join(dir, "assets");
-      try {
-        await mkdir(assetsDir, { recursive: true });
-        const audiosDir = existsSync(LOCAL_AUDIOS_DIR) ? LOCAL_AUDIOS_DIR : join(process.cwd(), "assets/audios");
-        const sourcePath = join(audiosDir, chosenTrack.filename);
-        if (existsSync(sourcePath)) {
-          const bytes = await readFile(sourcePath);
-          await writeFile(join(assetsDir, "bg_music.mp3"), bytes);
-          await writeFile(join(dir, "bg_music.mp3"), bytes);
-        }
-      } catch (err) {
-        console.warn("[agent-bridge] error copying audio file:", err);
-      }
-    }
-
-    const timing = extractMediaTiming(currentCode);
-    const audioEnd = timing.end !== undefined ? ` end={${timing.end}}` : "";
-
-    const audioElement = `
-        <audio
-          src="bg_music.mp3"
-          volume={-6}
-          start={0}${audioEnd}
-          name="${chosenTrack.title.replace(/"/g, "'")}"
-        />`;
-
-    if (updatedCode.includes("</scene>")) {
-      updatedCode = updatedCode.replace("</scene>", `${audioElement}\n      </scene>`);
-    }
-
-    const authorText = chosenTrack.author ? ` — *${chosenTrack.author}*` : "";
-    return {
-      explanation: `🎵 **Đã thêm nhạc nền từ thư viện cục bộ (Local Assets)!**\n\n- 🎼 **Tác phẩm**: **${chosenTrack.title}**${authorText}\n- 📻 **Thể loại**: **${chosenTrack.style}**\n- 🔊 **Âm lượng**: Tự động đặt **-6dB** để tôn giọng nói và âm thanh gốc.\n- ⚡ **Xử lý cục bộ**: 100% miễn phí, phát offline ngay lập tức, không yêu cầu gói Pro!`,
-      newCode: updatedCode,
-    };
-  }
-
-  // 3. AI Voiceover / Text-to-Speech (Edge-TTS Neural Voice: HoaiMy / NamMinh)
-  const isTtsPrompt =
+  // 2. AI Voiceover / Text-to-Speech
+  if (
     norm.includes("long tieng") ||
     norm.includes("thuyet minh") ||
     norm.includes("doc van ban") ||
     norm.includes("voiceover") ||
     norm.includes("tts") ||
     norm.includes("giong doc") ||
-    norm.includes("doc loi thoai");
-
-  if (isTtsPrompt) {
-    let updatedCode = currentCode;
-
-    // Detect gender preference
-    const isMale = norm.includes("nam") || norm.includes("giong nam");
-    const voice = isMale ? "vi-VN-NamMinhNeural" : "vi-VN-HoaiMyNeural";
-    const voiceLabel = isMale ? "Nam Minh (Giọng Nam ấm áp)" : "Hoài My (Giọng Nữ truyền cảm)";
-
-    // Extract text to read if enclosed in quotes or after colon
-    let textToRead = "";
-    const quoteMatch = prompt.match(/["“'«]([^"”'»]+)["”'»]/);
-    if (quoteMatch && quoteMatch[1].trim()) {
-      textToRead = quoteMatch[1].trim();
-    } else {
-      const parts = prompt.split(/[:：]/);
-      if (parts.length > 1 && parts[1].trim()) {
-        textToRead = parts[1].trim();
-      } else {
-        textToRead = "Chào mừng bạn đã đến với video hôm nay. Chúc bạn có một trải nghiệm thật tuyệt vời!";
-      }
-    }
-
-    let isSuccess = false;
-    const voiceFileName = "voiceover.mp3";
-
-    if (dir) {
-      try {
-        const assetsDir = join(dir, "assets");
-        await mkdir(assetsDir, { recursive: true });
-
-        const targetOut = join(assetsDir, voiceFileName);
-        const rootOut = join(dir, voiceFileName);
-
-        const edgeTtsBin = existsSync("/Library/Frameworks/Python.framework/Versions/3.13/bin/edge-tts")
-          ? "/Library/Frameworks/Python.framework/Versions/3.13/bin/edge-tts"
-          : "edge-tts";
-
-        await execFileAsync(edgeTtsBin, ["--text", textToRead, "--voice", voice, "--write-media", targetOut]);
-
-        try {
-          const bytes = await readFile(targetOut);
-          await writeFile(rootOut, bytes);
-        } catch {}
-
-        isSuccess = true;
-
-        // Clean up any cloud generate.voice references to avoid Pro dialog
-        updatedCode = updatedCode.replace(/import\s*\{\s*generate[\s\S]*?\}\s*from\s*["']@diffusionstudio\/jsx["'];?/g, "");
-        updatedCode = updatedCode.replace(/const\s+voice[\s\S]*?=\s*generate\.voice\([\s\S]*?\);\n?/g, "");
-
-        // Add or update voiceover track
-        const voiceElement = `
-        <audio
-          src="${voiceFileName}"
-          volume={0}
-          start={0}
-          name="AI Voiceover"
-        />`;
-
-        if (updatedCode.includes('name="AI Voiceover"')) {
-          // Already has voiceover track, just replace
-        } else if (updatedCode.includes("</scene>")) {
-          updatedCode = updatedCode.replace("</scene>", `${voiceElement}\n      </scene>`);
-        }
-      } catch (err) {
-        console.warn("[agent-bridge] error generating voiceover:", err);
-      }
-    }
-
-    if (isSuccess) {
-      return {
-        explanation: `🎙️ **Đã tạo giọng lồng tiếng AI Neural thành công (Edge-TTS)!**\n\n- 🗣️ **Diễn viên lồng tiếng**: **${voiceLabel}**\n- 📜 **Nội dung đọc**: *"${textToRead}"*\n- ⚡ **Chất lượng phòng thu**: Sử dụng mô hình thần kinh nhân tạo Microsoft Neural Voice, âm thanh trong trẻo, tự nhiên.\n- 💎 **Hoàn toàn miễn phí**: Chạy trực tiếp qua Edge-TTS, không tốn credit, không cần gói Pro!`,
-        newCode: updatedCode,
-      };
-    }
+    norm.includes("doc loi thoai")
+  ) {
+    const res = await handleVoiceoverAction(prompt, norm, currentCode, dir);
+    if (res) return res;
   }
 
-  // 4. Sinh ảnh AI / AI Image Generation ("sinh anh", "tao anh", "ve anh", "generate image", "ai image", "anh ai")
-  const isImageGen =
+  // 3. Sinh ảnh AI (FLUX.1 Turbo)
+  if (
     norm.includes("sinh anh") ||
     norm.includes("tao anh") ||
     norm.includes("ve anh") ||
     norm.includes("tao hinh anh") ||
-    norm.includes("sinh hinh anh") ||
     norm.includes("generate image") ||
     norm.includes("ai image") ||
-    norm.includes("anh ai") ||
-    norm.includes("tao photo");
-
-  if (isImageGen) {
-    let updatedCode = currentCode;
-
-    // Extract image prompt
-    let imagePrompt = "";
-    const quoteMatch = prompt.match(/["“'«]([^"”'»]+)["”'»]/);
-    if (quoteMatch && quoteMatch[1].trim()) {
-      imagePrompt = quoteMatch[1].trim();
-    } else {
-      const parts = prompt.split(/[:：]/);
-      if (parts.length > 1 && parts[1].trim()) {
-        imagePrompt = parts[1].trim();
-      } else {
-        // Strip common command trigger phrases
-        imagePrompt = prompt
-          .replace(/^(sinh ảnh|tạo ảnh|vẽ ảnh|sinh hình ảnh|tạo hình ảnh|generate image|ai image)\s*(cho tôi|cho video|giúp tôi)?\s*(về|hình|ảnh)?\s*/i, "")
-          .trim();
-        if (!imagePrompt) {
-          imagePrompt = "a cinematic photorealistic high detail beautiful scene, 8k resolution";
-        }
-      }
-    }
-
-    // Determine aspect ratio
-    let aspectRatio = "16:9";
-    let width = 1920;
-    let height = 1080;
-    if (norm.includes("doc") || norm.includes("9:16") || norm.includes("tiktok") || norm.includes("reel") || norm.includes("shorts")) {
-      aspectRatio = "9:16";
-      width = 1080;
-      height = 1920;
-    } else if (norm.includes("vuong") || norm.includes("1:1")) {
-      aspectRatio = "1:1";
-      width = 1080;
-      height = 1080;
-    }
-
-    let isSuccess = false;
-    const imgFileName = `ai_image_${Date.now()}.jpg`;
-
-    if (dir) {
-      try {
-        const assetsDir = join(dir, "assets");
-        await mkdir(assetsDir, { recursive: true });
-
-        const targetOut = join(assetsDir, imgFileName);
-        const rootOut = join(dir, imgFileName);
-
-        const seed = Math.floor(Math.random() * 1000000);
-        const encodedPrompt = encodeURIComponent(imagePrompt);
-        const fetchUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=flux&nologo=true&seed=${seed}`;
-
-        const res = await fetch(fetchUrl);
-        if (res.ok) {
-          const buffer = Buffer.from(await res.arrayBuffer());
-          await writeFile(targetOut, buffer);
-          try {
-            await writeFile(rootOut, buffer);
-          } catch {}
-
-          isSuccess = true;
-
-          // Insert or add image element into timeline code
-          const timing = extractMediaTiming(currentCode);
-          const start = timing.start ?? 0;
-          const end = timing.end ?? 5;
-
-          const imageElement = `
-        <image
-          src="${imgFileName}"
-          start={${start}}
-          end={${end}}
-          name="AI Generated Image"
-        />`;
-
-          if (updatedCode.includes("<image")) {
-            // Replace existing image or prepend
-            updatedCode = updatedCode.replace(/(<image[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${imgFileName}$2`);
-          } else if (updatedCode.includes("</scene>")) {
-            updatedCode = updatedCode.replace("</scene>", `${imageElement}\n      </scene>`);
-          }
-        }
-      } catch (err) {
-        console.warn("[agent-bridge] error generating AI image:", err);
-      }
-    }
-
-    if (isSuccess) {
-      return {
-        explanation: `🎨 **Đã sinh ảnh AI thành công (FLUX.1 Engine)!**\n\n- 🖼️ **File ảnh**: \`${imgFileName}\`\n- 📜 **Prompt**: *"${imagePrompt}"*\n- 📐 **Tỉ lệ**: **${aspectRatio}** (${width}x${height})\n- 🚀 **Model AI**: **FLUX.1 Turbo** (chuẩn chi tiết photorealistic 8K).\n- 💎 **100% Miễn phí**: Không mất credit, đã tự động chèn vào timeline video cho bạn!`,
-        newCode: updatedCode,
-      };
-    } else {
-      return {
-        explanation: `⚠️ **Không thể tải ảnh từ AI Engine lúc này.** Vui lòng kiểm tra lại kết nối mạng và thử lại!`,
-        newCode: currentCode,
-      };
-    }
-  }
-
-  // 5. Auto Captions / Subtitles ("tạo phụ đề", "subtitles", "captions", "lời thoại")
-  if (norm.includes("phu de") || norm.includes("caption") || norm.includes("sub") || norm.includes("transcribe")) {
-    let updatedCode = currentCode;
-
-    // Remove any leftover error attributes on captions
-    updatedCode = updatedCode.replace(/\s+error="[^"]*"/g, "");
-
-    // Clean up any cloud generate.audio references that might have been accidentally inserted
-    updatedCode = updatedCode.replace(/import\s*\{\s*generate[\s\S]*?\}\s*from\s*["']@diffusionstudio\/jsx["'];?/g, "");
-    updatedCode = updatedCode.replace(/const\s+bgMusic\s*=\s*generate\.audio\([\s\S]*?\);\n?/g, "");
-    updatedCode = updatedCode.replace(/<audio\s+src=\{bgMusic\}[\s\S]*?\/>/g, "");
-
-    let transcribedMediaName = "";
-    let hasJson = false;
-
-    if (dir) {
-      const assetsDir = join(dir, "assets");
-
-      try {
-        await mkdir(assetsDir, { recursive: true });
-
-        // Always transcribe fresh audio for the active video/audio in the project
-        const result = await transcribeProjectMedia(dir, _assets);
-        if (result) {
-          transcribedMediaName = result.mediaName;
-          if (result.json) {
-            hasJson = true;
-            await writeFile(join(assetsDir, "captions.json"), result.json, "utf8");
-            await writeFile(join(dir, "captions.json"), result.json, "utf8");
-          }
-          if (result.srt) {
-            await writeFile(join(assetsDir, "captions.srt"), result.srt, "utf8");
-            await writeFile(join(dir, "captions.srt"), result.srt, "utf8");
-          }
-        }
-      } catch (e) {
-        console.warn("[agent-bridge] error while creating fresh captions:", e);
-      }
-    }
-
-    const captionFileName = hasJson ? "captions.json" : "captions.srt";
-    const timing = extractMediaTiming(currentCode);
-    let timingProps = "";
-    if (timing.start !== undefined) timingProps += `\n          start={${timing.start}}`;
-    if (timing.end !== undefined) timingProps += `\n          end={${timing.end}}`;
-    if (timing.sourceIn !== undefined) timingProps += `\n          sourceIn={${timing.sourceIn}}`;
-    if (timing.sourceOut !== undefined) timingProps += `\n          sourceOut={${timing.sourceOut}}`;
-
-    if (updatedCode.includes("<captions")) {
-      updatedCode = updatedCode.replace(/<captions\b[\s\S]*?\/>/, `<captions
-          src="${captionFileName}"
-          preset="spotlight"${timingProps}
-        />`);
-    } else {
-      const captionElement = `
-        <captions
-          src="${captionFileName}"
-          preset="spotlight"${timingProps}
-        />`;
-      if (updatedCode.includes("</scene>")) {
-        updatedCode = updatedCode.replace("</scene>", `${captionElement}\n      </scene>`);
-      }
-    }
-
-    const detailText = transcribedMediaName
-      ? `Đã nhận diện toàn bộ giọng nói từ video **${transcribedMediaName}** với mốc thời gian khớp từng từ và căn chỉnh chuẩn theo timeline.`
-      : `Đã tạo mới tệp phụ đề \`${captionFileName}\` đồng bộ khớp thời gian theo video trên timeline.`;
-
-    return {
-      explanation: `🗣️ **Đã tạo mới phụ đề tự động khớp 100% âm thanh video!**\n- 🎙️ **Nội dung mới**: ${detailText}\n- ⏱️ **Đồng bộ Timeline**: Tự động căn mốc bắt đầu (start) khớp với vị trí video trên timeline.\n- ✨ **Hiệu ứng Spotlight**: Từng từ ngữ phát sáng chính xác theo giọng nói thực tế.\n- ⚡ **Xử lý cục bộ**: 100% miễn phí, không tốn credits và không gọi cloud.`,
-      newCode: updatedCode,
-    };
-  }
-
-  // 4. Upscale / Sharpen / Nâng cấp độ nét / Khử mờ ("upscale", "lam net", "tang net", "nang cap do net", "khu mo", "sharpen", "sieu net", "chat luong cao")
-  if (
-    norm.includes("upscale") ||
-    norm.includes("lam net") ||
-    norm.includes("tang net") ||
-    norm.includes("nang cap do net") ||
-    norm.includes("khu mo") ||
-    norm.includes("sharpen") ||
-    norm.includes("sieu net") ||
-    norm.includes("do net")
+    norm.includes("anh ai")
   ) {
-    let updatedCode = currentCode;
-    let isApplied = false;
-    let finalOutName = "";
-
-    if (dir) {
-      try {
-        const found = await findMediaSourcePath(dir, _assets);
-        if (found && existsSync(found.path)) {
-          const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
-          const assetsDir = join(dir, "assets");
-          await mkdir(assetsDir, { recursive: true });
-
-          const outName = `${found.name.replace(/\.[^.]+$/, "")}_sharpened.mp4`;
-          const targetOut = join(assetsDir, outName);
-          const rootOut = join(dir, outName);
-
-          // FFmpeg Lanczos 2x Scaling + Unsharp Mask filter
-          const filter = "scale=iw*2:ih*2:flags=lanczos,unsharp=5:5:1.0:5:5:0.0";
-          await execFileAsync(ffmpegBin, [
-            "-i", found.path,
-            "-vf", filter,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
-            targetOut,
-            "-y",
-          ]);
-
-          // Copy to root as well for direct relative path reference
-          try {
-            const bytes = await readFile(targetOut);
-            await writeFile(rootOut, bytes);
-          } catch {}
-
-          finalOutName = outName;
-          isApplied = true;
-
-          // Replace src on <video> element
-          if (updatedCode.includes("<video")) {
-            updatedCode = updatedCode.replace(/(<video[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
-          }
-        }
-      } catch (err) {
-        console.warn("[agent-bridge] error upscaling media:", err);
-      }
-    }
-
-    if (isApplied) {
-      return {
-        explanation: `🚀 **Đã nâng cấp độ nét & khử mờ video thành công (FFmpeg Lanczos + Unsharp)!**\n\n- 🎞️ **Tệp đã tạo**: \`${finalOutName}\`\n- 🔍 **Độ phân giải**: Nhân đôi kích thước khung hình (2x) với thuật toán nội suy **Lanczos Super-Resolution**.\n- 💎 **Khử mờ & Chi tiết**: Áp dụng bộ lọc **Unsharp Mask** tăng cường độ tương phản viền chi tiết, giúp hình ảnh trong trẻo và rõ nét.\n- ⚡ **Xử lý cục bộ**: 100% Offline trên máy bằng FFmpeg, không tốn credit, không cần gói Pro!`,
-        newCode: updatedCode,
-      };
-    } else {
-      // Fallback: apply contrast & sharpness effects on the existing video element
-      if (currentCode.includes("<video")) {
-        const effectsBlock = `
-          <effect type="contrast" value={0.18} />
-          <effect type="saturate" value={0.12} />
-          <effect type="brightness" value={0.03} />`;
-
-        if (updatedCode.includes("/>")) {
-          updatedCode = updatedCode.replace(/(<video[^>]*?)\/>/, `$1>${effectsBlock}\n          </video>`);
-        } else if (updatedCode.includes("</video>")) {
-          updatedCode = updatedCode.replace("</video>", `${effectsBlock}\n          </video>`);
-        }
-
-        return {
-          explanation: `✨ **Đã tối ưu tăng cường độ nét & khử mờ video!**\n- 🔍 Tăng cường độ tương phản (+18%) và độ sáng viền để hình ảnh sắc nét hơn.\n- ⚡ Hoàn toàn cục bộ, không cần gói Pro.`,
-          newCode: updatedCode,
-        };
-      }
-    }
+    const res = await handleImageGenAction(prompt, norm, currentCode, dir, extractMediaTiming);
+    if (res) return res;
   }
 
-  // 5. Background Removal / Xóa nền ảnh / Xóa phông xanh video ("xoa nen", "tach nen", "xoa phong", "phong xanh", "remove bg", "chromakey")
+  // 4. Auto Captions / Subtitles (Whisper)
+  if (norm.includes("phu de") || norm.includes("caption") || norm.includes("sub") || norm.includes("transcribe")) {
+    return await handleCaptionsAction(currentCode, assets, dir, extractMediaTiming);
+  }
+
+  // 5. Nâng cấp độ nét / Super-resolution (Lanczos + Unsharp)
+  if (
+    norm.includes("do net") ||
+    norm.includes("khu mo") ||
+    norm.includes("ro net") ||
+    norm.includes("sieu net") ||
+    norm.includes("upscale") ||
+    norm.includes("sharpen") ||
+    norm.includes("chat luong cao")
+  ) {
+    return await handleUpscaleAction(currentCode, assets, dir);
+  }
+
+  // 6. Xóa nền / Phông xanh (Chromakey / Rembg)
   if (
     norm.includes("xoa nen") ||
     norm.includes("tach nen") ||
@@ -984,352 +270,94 @@ async function processVideoEditPrompt(
     norm.includes("remove bg") ||
     norm.includes("chromakey")
   ) {
-    let updatedCode = currentCode;
-    let outResultName = "";
-    let isSuccess = false;
+    return await handleRemoveBgAction(currentCode, assets, dir);
+  }
 
-    if (dir) {
-      try {
-        const found = await findMediaSourcePath(dir, _assets);
-        if (found && existsSync(found.path)) {
-          const ffmpegBin = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
-          const assetsDir = join(dir, "assets");
+  // 7. Nhạc nền (Local Audio Library)
+  if (norm.includes("nhac") || norm.includes("music") || norm.includes("audio") || norm.includes("soundtrack")) {
+    const isCut = norm.includes("cat") || norm.includes("xoa") || norm.includes("tat");
+    if (!isCut) {
+      const chosenTrack = await pickLocalAudioTrack(norm);
+      let updatedCode = currentCode;
+
+      updatedCode = updatedCode.replace(/import\s*\{\s*generate[\s\S]*?\}\s*from\s*["']@diffusionstudio\/jsx["'];?/g, "");
+      updatedCode = updatedCode.replace(/const\s+bgMusic\s*=\s*generate\.audio\([\s\S]*?\);\n?/g, "");
+      updatedCode = updatedCode.replace(/<audio\b[\s\S]*?\/>/g, "");
+
+      if (dir) {
+        const assetsDir = join(dir, "assets");
+        try {
           await mkdir(assetsDir, { recursive: true });
-
-          const isVideoFile = /\.(mp4|mov|webm|mkv)$/i.test(found.path);
-
-          if (isVideoFile) {
-            // Video Green Screen / Chromakey
-            const outName = `${found.name.replace(/\.[^.]+$/, "")}_transparent.webm`;
-            const targetOut = join(assetsDir, outName);
-            const rootOut = join(dir, outName);
-
-            // Chromakey green screen into VP9 yuva420p transparent WebM
-            const filter = "chromakey=0x00FF00:0.25:0.05";
-            await execFileAsync(ffmpegBin, [
-              "-i", found.path,
-              "-vf", filter,
-              "-c:v", "libvpx-vp9",
-              "-pix_fmt", "yuva420p",
-              "-c:a", "libopus",
-              targetOut,
-              "-y",
-            ]);
-
-            try {
-              const bytes = await readFile(targetOut);
-              await writeFile(rootOut, bytes);
-            } catch {}
-
-            outResultName = outName;
-            isSuccess = true;
-
-            if (updatedCode.includes("<video")) {
-              updatedCode = updatedCode.replace(/(<video[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
-            }
-          } else {
-            // Image Background Removal (PNG with transparency)
-            const outName = `${found.name.replace(/\.[^.]+$/, "")}_nobg.png`;
-            const targetOut = join(assetsDir, outName);
-            const rootOut = join(dir, outName);
-
-            try {
-              await execFileAsync("rembg", ["i", found.path, targetOut]);
-            } catch {
-              // Colorkey fallback for solid background
-              await execFileAsync(ffmpegBin, [
-                "-i", found.path,
-                "-vf", "colorkey=0xFFFFFF:0.15:0.1",
-                "-c:v", "png",
-                targetOut,
-                "-y",
-              ]);
-            }
-
-            try {
-              const bytes = await readFile(targetOut);
-              await writeFile(rootOut, bytes);
-            } catch {}
-
-            outResultName = outName;
-            isSuccess = true;
-
-            if (updatedCode.includes("<image")) {
-              updatedCode = updatedCode.replace(/(<image[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
-            }
+          const audiosDir = existsSync(LOCAL_AUDIOS_DIR) ? LOCAL_AUDIOS_DIR : join(process.cwd(), "assets/audios");
+          const sourcePath = join(audiosDir, chosenTrack.filename);
+          if (existsSync(sourcePath)) {
+            const bytes = await readFile(sourcePath);
+            await writeFile(join(assetsDir, "bg_music.mp3"), bytes);
+            await writeFile(join(dir, "bg_music.mp3"), bytes);
           }
+        } catch (err) {
+          console.warn("[agent-bridge] error copying audio:", err);
         }
-      } catch (err) {
-        console.warn("[agent-bridge] error removing background:", err);
-      }
-    }
-
-    if (isSuccess) {
-      return {
-        explanation: `🪄 **Đã tách và xóa nền thành công (Offline 100%)!**\n\n- 🎞️ **Tệp trong suốt**: \`${outResultName}\`\n- 🟢 **Kênh Alpha Transparency**: Đã chuyển đổi nền sang dạng trong suốt (Transparent).\n- ⚡ **Xử lý cục bộ**: Không gửi dữ liệu lên server, không tiêu tốn credit Pro!`,
-        newCode: updatedCode,
-      };
-    } else {
-      return {
-        explanation: `🪄 **Đã sẵn sàng chức năng Xóa nền cục bộ:**\n- Hỗ trợ tách nền ảnh PNG trong suốt và video phông xanh (Chromakey) thành WebM Transparent.\n- Không cần tài khoản Pro!`,
-        newCode: currentCode,
-      };
-    }
-  }
-
-  // 6. Color Filter / Cinematic Color Grading ("chỉnh màu", "filter", "màu sắc", "vintage", "contrast")
-  if (norm.includes("chinh mau") || norm.includes("filter") || norm.includes("mau sac") || norm.includes("color") || norm.includes("vintage")) {
-    if (currentCode.includes("<video")) {
-      let updatedCode = currentCode;
-      const effectsBlock = `
-          <effect type="contrast" value={0.12} />
-          <effect type="saturate" value={0.2} />
-          <effect type="brightness" value={0.05} />`;
-
-      if (updatedCode.includes("/>")) {
-        updatedCode = updatedCode.replace(/(<video[^>]*?)\/>/, `$1>${effectsBlock}\n          </video>`);
-      } else if (updatedCode.includes("</video>")) {
-        updatedCode = updatedCode.replace("</video>", `${effectsBlock}\n          </video>`);
       }
 
+      const timing = extractMediaTiming(currentCode);
+      const audioEnd = timing.end !== undefined ? ` end={${timing.end}}` : "";
+      const audioElement = `
+        <audio
+          src="bg_music.mp3"
+          volume={-6}
+          start={0}${audioEnd}
+          name="${chosenTrack.title.replace(/"/g, "'")}"
+        />`;
+
+      if (updatedCode.includes("</scene>")) {
+        updatedCode = updatedCode.replace("</scene>", `${audioElement}\n      </scene>`);
+      }
+
+      const authorText = chosenTrack.author ? ` — *${chosenTrack.author}*` : "";
       return {
-        explanation: `🎨 **Đã áp dụng bộ lọc màu Cinematic Color Grading!**\n- ✨ **Tương phản (Contrast)**: +12% giúp hình ảnh sắc nét hơn.\n- 🌈 **Độ bão hòa (Saturate)**: +20% giúp màu sắc tươi tắn, rực rỡ.\n- ☀️ **Độ sáng (Brightness)**: +5% cân bằng ánh sáng khung hình.`,
+        explanation: `🎵 **Đã thêm nhạc nền từ thư viện cục bộ (Local Assets)!**\n\n- 🎼 **Tác phẩm**: **${chosenTrack.title}**${authorText}\n- 📻 **Thể loại**: **${chosenTrack.style}**\n- 🔊 **Âm lượng**: Tự động đặt **-6dB** để tôn giọng nói và âm thanh gốc.\n- ⚡ **Xử lý cục bộ**: 100% miễn phí, phát offline ngay lập tức, không yêu cầu gói Pro!`,
         newCode: updatedCode,
       };
     }
   }
 
-  // 5. Trimming / Cutting / Deleting spans
-  const hasCutKeyword =
-    norm.includes("cat") ||
-    norm.includes("xoa") ||
-    norm.includes("bo") ||
-    norm.includes("giu") ||
-    norm.includes("trim") ||
-    norm.includes("cut") ||
-    norm.includes("delete") ||
-    norm.includes("remove");
+  // 8. Cắt video (Trimming / Cutting)
+  const trimRes = handleTrimVideo(prompt, norm, currentCode);
+  if (trimRes) return trimRes;
 
-  if (hasCutKeyword) {
-    let startSec = 0;
-    let endSec: number | null = null;
-
-    // Extract all numbers in prompt
-    const numbers = (prompt.match(/\d+(?:\.\d+)?/g) || []).map(Number);
-
-    if (norm.includes("dau") && (norm.includes("xoa") || norm.includes("cat") || norm.includes("bo"))) {
-      // "xoa 3s dau" -> start at 3s, keep to end
-      const cutVal = numbers.length > 0 ? numbers[0] : 3;
-      startSec = cutVal;
-      endSec = 10.73;
-    } else if (norm.includes("cuoi") && (norm.includes("xoa") || norm.includes("cat") || norm.includes("bo"))) {
-      // "xoa 3s cuoi" -> keep from 0 to (10.73 - 3)
-      const cutVal = numbers.length > 0 ? numbers[0] : 3;
-      startSec = 0;
-      endSec = Math.max(0, 10.73 - cutVal);
-    } else if (numbers.length >= 2) {
-      startSec = numbers[0];
-      endSec = numbers[1];
-    } else if (numbers.length === 1) {
-      const val = numbers[0];
-      if (
-        norm.includes("tu giay") ||
-        norm.includes("tu") ||
-        norm.includes("tro di") ||
-        norm.includes("den cuoi") ||
-        norm.includes("di cho toi") ||
-        norm.includes("di")
-      ) {
-        // "xoa tu giay thu 3 di cho toi" -> keep from 0 to 3s
-        startSec = 0;
-        endSec = val;
-      } else {
-        startSec = 0;
-        endSec = val;
-      }
-    } else if (currentTime && currentTime > 0) {
-      startSec = 0;
-      endSec = Math.round(currentTime * 100) / 100;
-    }
-
-    const hasVideoElement = currentCode.includes("<video") || currentCode.includes("<videoPaint");
-    if (endSec !== null && hasVideoElement) {
-      let updatedCode = currentCode;
-
-      const tagRegex = currentCode.includes("<video") ? /<video\b/ : /<rect\b/;
-
-      if (updatedCode.includes("start={")) {
-        updatedCode = updatedCode.replace(/start=\{[^}]+\}/, `start={${startSec}}`);
-      } else {
-        updatedCode = updatedCode.replace(tagRegex, (match) => `${match} start={${startSec}}`);
-      }
-
-      if (updatedCode.includes("end={")) {
-        updatedCode = updatedCode.replace(/end=\{[^}]+\}/, `end={${endSec}}`);
-      } else {
-        updatedCode = updatedCode.replace(tagRegex, (match) => `${match} end={${endSec}}`);
-      }
-
-      return {
-        explanation: `✅ **Đã cắt video thành công!**\n- **Thời lượng**: Giữ lại từ **${startSec}s** đến **${endSec}s** (độ dài ${Math.abs(endSec - startSec)} giây).\n- **Timeline**: Đã tự động cập nhật lại độ dài clip trên màn hình.`,
-        newCode: updatedCode,
-      };
-    }
+  // 9. Zoom In keyframes
+  if (norm.includes("zoom") || norm.includes("phong to") || norm.includes("canh gan")) {
+    const res = handleZoomEffect(currentCode);
+    if (res) return res;
   }
 
-  // 6. Zoom In / Scale Keyframe
-  if (
-    norm.includes("zoom") ||
-    norm.includes("phong to") ||
-    norm.includes("scale") ||
-    norm.includes("thu nho") ||
-    norm.includes("phong lon")
-  ) {
-    if (currentCode.includes("<video")) {
-      let updatedCode = currentCode;
-
-      // Remove existing scale keyframeTrack if any
-      updatedCode = updatedCode.replace(/<keyframeTrack\s+property="scale"[\s\S]*?<\/keyframeTrack>/g, "");
-
-      const keyframeBlock = `
-          <keyframeTrack property="scale">
-            <keyframe time={0} value={1} easing="easeInOut" />
-            <keyframe time={3} value={1.3} />
-          </keyframeTrack>`;
-
-      if (updatedCode.includes("/>")) {
-        updatedCode = updatedCode.replace(/(<video[^>]*?)\/>/, `$1>${keyframeBlock}\n          </video>`);
-      } else if (updatedCode.includes("</video>")) {
-        updatedCode = updatedCode.replace("</video>", `${keyframeBlock}\n          </video>`);
-      }
-
-      return {
-        explanation: `🔍 **Đã thêm hiệu ứng Keyframe Zoom In!**\n- Phóng to mượt mà từ **1.0x lên 1.3x** trong 3 giây đầu tiên với gia tốc \`easeInOut\`.\n- Bạn có thể bấm Play để xem thử chuyển động trên Canvas.`,
-        newCode: updatedCode,
-      };
-    }
+  // 10. Fade Out keyframes
+  if (norm.includes("fade") || norm.includes("mo dan") || norm.includes("hien dan") || norm.includes("opacity")) {
+    const res = handleFadeEffect(currentCode);
+    if (res) return res;
   }
 
-  // 7. Fade In / Out / Opacity Keyframes
-  if (
-    norm.includes("fade") ||
-    norm.includes("mo dan") ||
-    norm.includes("hien dan") ||
-    norm.includes("opacity") ||
-    norm.includes("to dan")
-  ) {
-    if (currentCode.includes("<video")) {
-      let updatedCode = currentCode;
-
-      updatedCode = updatedCode.replace(/<keyframeTrack\s+property="opacity"[\s\S]*?<\/keyframeTrack>/g, "");
-
-      const keyframeBlock = `
-          <keyframeTrack property="opacity">
-            <keyframe time={0} value={1} />
-            <keyframe time={8.5} value={1} />
-            <keyframe time={10.7} value={0} easing="easeIn" />
-          </keyframeTrack>`;
-
-      if (updatedCode.includes("/>")) {
-        updatedCode = updatedCode.replace(/(<video[^>]*?)\/>/, `$1>${keyframeBlock}\n          </video>`);
-      } else if (updatedCode.includes("</video>")) {
-        updatedCode = updatedCode.replace("</video>", `${keyframeBlock}\n          </video>`);
-      }
-
-      return {
-        explanation: `✨ **Đã thêm hiệu ứng Fade Out kết thúc!**\n- Mờ dần êm ái khi clip sắp kết thúc.`,
-        newCode: updatedCode,
-      };
-    }
+  // 11. Chỉnh màu Cinematic
+  if (norm.includes("chinh mau") || norm.includes("filter") || norm.includes("mau sac") || norm.includes("color")) {
+    const res = handleColorGrade(currentCode);
+    if (res) return res;
   }
 
-  // 8. Add Text / Title / Subtitle
-  if (
-    norm.includes("chu") ||
-    norm.includes("text") ||
-    norm.includes("tieu de") ||
-    norm.includes("title") ||
-    norm.includes("intro") ||
-    norm.includes("caption")
-  ) {
-    let titleText = "Nhanh gọn lẹ, dứt khoát ✅";
-    const textQuoteMatch = prompt.match(/["'“](.+?)["'”]/);
-    if (textQuoteMatch) {
-      titleText = textQuoteMatch[1];
-    } else {
-      const cleaned = prompt
-        .replace(/(?:thêm|tạo|ghi|chèn|viết)\s*(?:chữ|tiêu đề|text|title|intro|phụ đề)?/gi, "")
-        .replace(/[:\-]/g, "")
-        .trim();
-      if (cleaned.length > 0 && cleaned.length < 50) {
-        titleText = cleaned;
-      }
-    }
-
-    const textElement = `
-        <text
-          x={70}
-          y={200}
-          fontSize={48}
-          fontWeight="bold"
-          color="#FFFFFF"
-          fontFamily="Inter"
-          start={0}
-          end={4}
-        >
-          ${titleText}
-          <shadow color="#000000" blur={16} offsetY={4} />
-        </text>`;
-
-    if (currentCode.includes("</scene>")) {
-      const updatedCode = currentCode.replace("</scene>", `${textElement}\n      </scene>`);
-      return {
-        explanation: `📝 **Đã chèn thêm tiêu đề chữ Intro:** "${titleText}"\n- Xuất hiện từ **0s đến 4s** với hiệu ứng bóng đổ sắc nét.`,
-        newCode: updatedCode,
-      };
-    }
+  // 12. Thêm chữ / Intro Text
+  if (norm.includes("chu") || norm.includes("text") || norm.includes("tieu de") || norm.includes("title") || norm.includes("intro")) {
+    const res = handleAddText(prompt, currentCode);
+    if (res) return res;
   }
 
-  // 9. Revert / Reset
-  if (
-    norm.includes("hoan tac") ||
-    norm.includes("khoi phuc") ||
-    norm.includes("ban dau") ||
-    norm.includes("reset") ||
-    norm.includes("goc") ||
-    norm.includes("undo")
-  ) {
-    const defaultCode = `import type { Time } from "@diffusionstudio/jsx";
-
-export default function Project() {
-  return (
-    <stage background="#161616" camera={[0.5, 0, 0, 0.5, 0, 0]} id="stage-root">
-      <scene name="Main" width={720} height={1280} fill="#000000" active id="main-scene">
-        <sequence name="A-roll" id="a-roll-seq">
-          <video
-            name="123.mp4"
-            src="123.mp4"
-            start={0}
-            end={10.73}
-            width={720}
-            height={1280}
-            id="video-1"
-          />
-        </sequence>
-      </scene>
-    </stage>
-  );
-}
-`;
-    return {
-      explanation: `🔄 **Đã hoàn tác video về trạng thái nguyên bản gốc (10.73s).**`,
-      newCode: defaultCode,
-    };
+  // 13. Khôi phục / Reset ban đầu
+  if (norm.includes("hoan tac") || norm.includes("khoi phuc") || norm.includes("ban dau") || norm.includes("reset") || norm.includes("undo")) {
+    return handleResetOriginal();
   }
 
   // Fallback response with helpful guide
   return {
-    explanation: `🤖 **Antigravity Ultra** đã tiếp nhận lệnh: *"${prompt}"*.\n\nBạn có thể thử các câu lệnh mẫu như:\n- 🎵 *"Tìm các đoạn nhạc background hay để thêm vào video cho tôi"*\n- 🎬 *"Thêm các hiệu ứng vào video cho tôi"*\n- 🎨 *"Chỉnh màu Cinematic cho video"*\n- ✂️ *"Cắt từ giây thứ 3 đi cho tôi"* hoặc *"Cắt giữ lại 0s đến 4s"*\n- 🔍 *"Thêm hiệu ứng zoom in phóng to"*\n- 📝 *"Thêm chữ Intro: Nhanh gọn lẹ"* \n- 🔄 *"Hoàn tác về ban đầu"*`,
+    explanation: `🤖 **Antigravity Ultra** đã tiếp nhận lệnh: *"${prompt}"*.\n\nBạn có thể thử các câu lệnh mẫu như:\n- 🎨 *"Sinh ảnh AI: phong cảnh hoàng hôn 8k"*\n- 🎙️ *"Lồng tiếng cho video: Xin chào bạn..."*\n- 💎 *"Nâng cấp độ nét cho video"*\n- 🪄 *"Xóa nền video phông xanh"*\n- 🎵 *"Thêm nhạc nền phù hợp"*\n- ✂️ *"Cắt giữ lại 0s đến 4s"*\n- 🔍 *"Thêm hiệu ứng zoom in phóng to"*\n- 📝 *"Thêm chữ Intro: Nhanh gọn lẹ"* \n- 🔄 *"Hoàn tác về ban đầu"*`,
     newCode: currentCode,
   };
 }
