@@ -23,11 +23,19 @@ import { identify, resetIdentity, track } from '@/lib/analytics';
 import { mainBridge } from '@/lib/ipc';
 import { MAIN_CHANNELS } from '@desktop/main-channels';
 import { assert } from '@/utils';
+import { setOnboardingCompleted } from '@/pages/onboarding';
 
 type OAuthProvider = 'google' | 'apple' | 'github';
 
+export type CustomUserInfo = {
+  email: string;
+  deviceId: string;
+  expired_at: string;
+};
+
 type AuthContextValue = {
   session: Accessor<Session | null>;
+  customUser: Accessor<CustomUserInfo | null>;
   user: Accessor<User | null>;
   isAuthenticated: Accessor<boolean>;
   headless: Accessor<boolean>;
@@ -42,6 +50,7 @@ type AuthContextValue = {
   marketingAnnouncementsEnabled: Accessor<boolean>;
   signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
   signInWithOtp: (email: string) => Promise<{ error: string | null }>;
+  loginWithCustomCredentials: (info: CustomUserInfo) => void;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<{ error: string | null }>;
   refreshSession: () => Promise<void>;
@@ -65,9 +74,27 @@ const ELECTRON_AUTH_REDIRECT = 'https://app.diffusion.studio/auth/electron-callb
 const USER_DATA_QUERY = "lifetime_credit_balance,monthly_credit_balance,monthly_credit_quota,access_level,stripe_customer_id,last_credit_reset_at,product_updates_enabled,marketing_announcements_enabled" as const;
 
 export function AuthProvider(props: { children: JSX.Element }) {
+  const getInitialCustomUser = (): CustomUserInfo | null => {
+    try {
+      const stored = localStorage.getItem('vixa_custom_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  };
+
   const [session, setSession] = createSignal<Session | null>(null);
+  const [customUser, setCustomUser] = createSignal<CustomUserInfo | null>(getInitialCustomUser());
   const [isLoading, setIsLoading] = createSignal(true);
   const [headless, setHeadless] = createSignal(false);
+
+  const loginWithCustomCredentials = (info: CustomUserInfo) => {
+    try {
+      localStorage.setItem('vixa_custom_user', JSON.stringify(info));
+    } catch {}
+    setCustomUser(info);
+    setOnboardingCompleted(true);
+  };
 
   onMount(() => {
     if (!window.desktop) return;
@@ -250,6 +277,11 @@ export function AuthProvider(props: { children: JSX.Element }) {
   };
 
   const signOut = async () => {
+    try {
+      localStorage.removeItem('vixa_custom_user');
+    } catch {}
+    setCustomUser(null);
+
     if (!supabase) return;
 
     const { error } = await supabase.auth.signOut();
@@ -291,12 +323,12 @@ export function AuthProvider(props: { children: JSX.Element }) {
     }
   };
 
-  const isPro = () => accessLevel() > 1;
-  const hasStripeCustomer = () => !!userData()?.stripe_customer_id;
+  const isPro = () => (customUser() ? true : accessLevel() > 1);
+  const hasStripeCustomer = () => (customUser() ? true : !!userData()?.stripe_customer_id);
   const productUpdatesEnabled = () => userData()?.product_updates_enabled ?? true;
   const marketingAnnouncementsEnabled = () => userData()?.marketing_announcements_enabled ?? true;
-  const remainingCredits = () => monthlyCreditBalance() + lifetimeCreditBalance();
-  const creditLimit = () => (isPro() ? monthlyCreditQuota() : FREE_CREDITS_QUOTA);
+  const remainingCredits = () => (customUser() ? 999999 : monthlyCreditBalance() + lifetimeCreditBalance());
+  const creditLimit = () => (customUser() ? 999999 : (isPro() ? monthlyCreditQuota() : FREE_CREDITS_QUOTA));
   const nextCreditReset = (): Date | null => {
     const last = userData()?.last_credit_reset_at;
     if (!last) return null;
@@ -305,12 +337,39 @@ export function AuthProvider(props: { children: JSX.Element }) {
     return next;
   };
 
+  const user = (): User | null => {
+    const s = session();
+    if (s?.user) return s.user;
+    const cu = customUser();
+    if (cu) {
+      return {
+        id: `custom_${cu.email}`,
+        app_metadata: { provider: 'email' },
+        user_metadata: {
+          email: cu.email,
+          full_name: cu.email.split('@')[0],
+          first_name: cu.email.split('@')[0],
+          deviceId: cu.deviceId,
+          expired_at: cu.expired_at,
+        },
+        aud: 'authenticated',
+        created_at: new Date().toISOString(),
+        email: cu.email,
+        phone: '',
+        role: 'authenticated',
+        updated_at: new Date().toISOString(),
+      } as User;
+    }
+    return null;
+  };
+
   const ctx: AuthContextValue = {
     session,
+    customUser,
     isPro,
     hasStripeCustomer,
-    user: () => session()?.user ?? null,
-    isAuthenticated: () => !!session(),
+    user,
+    isAuthenticated: () => !!session() || !!customUser(),
     headless,
     isLoading,
     accessLevel,
@@ -321,6 +380,7 @@ export function AuthProvider(props: { children: JSX.Element }) {
     marketingAnnouncementsEnabled,
     signInWithOAuth,
     signInWithOtp,
+    loginWithCustomCredentials,
     signOut,
     deleteAccount,
     refreshSession,

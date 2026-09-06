@@ -21,7 +21,7 @@ const [onboardingCompleted, setOnboardingCompleted] = createStoredSignal(
   store.define('onboarding.completed', false),
 );
 
-export { onboardingCompleted };
+export { onboardingCompleted, setOnboardingCompleted };
 
 type StepState = 'todo' | 'busy' | 'done';
 
