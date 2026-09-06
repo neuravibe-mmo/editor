@@ -306,7 +306,6 @@ export async function handleRemoveBgAction(
 ): Promise<ActionResult> {
   let updatedCode = currentCode;
   let outResultName = "";
-  let isSuccess = false;
 
   if (dir) {
     try {
@@ -340,11 +339,17 @@ export async function handleRemoveBgAction(
           } catch {}
 
           outResultName = outName;
-          isSuccess = true;
 
-          if (updatedCode.includes("<video")) {
+          if (updatedCode.includes("<videoPaint")) {
+            updatedCode = updatedCode.replace(/(<videoPaint[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
+          } else if (updatedCode.includes("<video")) {
             updatedCode = updatedCode.replace(/(<video[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
           }
+
+          return {
+            explanation: `🎬 **Xử lý tách nền Video (FFmpeg Chroma Keying):**\n\n- 🎞️ **Tệp xuất ra**: \`${outResultName}\`\n- 🟢 **Cơ chế**: Bộ lọc **Chroma Key (0x00FF00)** dùng để bóc tách **phông xanh lá (Green Screen)**.\n- ⚠️ **Lưu ý quan trọng**: Nếu video của bạn quay ngoài tự nhiên (không có phông xanh), bộ lọc sẽ không thể phân tách chủ thể tự động được mà cần video quay trên phông xanh lá/dương hoặc dùng tính năng tách nền cho **Hình ảnh (Image)**.`,
+            newCode: updatedCode,
+          };
         } else {
           // Image background removal
           const outName = `${found.name.replace(/\.[^.]+$/, "")}_nobg.png`;
@@ -376,11 +381,15 @@ export async function handleRemoveBgAction(
           } catch {}
 
           outResultName = outName;
-          isSuccess = true;
 
           if (updatedCode.includes("<image")) {
             updatedCode = updatedCode.replace(/(<image[^>]*?\bsrc=)(["'])[^"']+\2/, `$1$2${outName}$2`);
           }
+
+          return {
+            explanation: `🪄 **Đã tách và xóa nền ảnh thành công!**\n\n- 🖼️ **Ảnh trong suốt**: \`${outResultName}\`\n- 🟢 **Kênh Alpha Transparency**: Đã chuyển đổi nền sang dạng trong suốt (PNG Transparent).\n- ⚡ **Xử lý cục bộ**: Không gửi dữ liệu lên server, không tiêu tốn credit Pro!`,
+            newCode: updatedCode,
+          };
         }
       }
     } catch (err) {
@@ -388,12 +397,6 @@ export async function handleRemoveBgAction(
     }
   }
 
-  if (isSuccess) {
-    return {
-      explanation: `🪄 **Đã tách và xóa nền thành công (Offline 100%)!**\n\n- 🎞️ **Tệp trong suốt**: \`${outResultName}\`\n- 🟢 **Kênh Alpha Transparency**: Đã chuyển đổi nền sang dạng trong suốt (Transparent).\n- ⚡ **Xử lý cục bộ**: Không gửi dữ liệu lên server, không tiêu tốn credit Pro!`,
-      newCode: updatedCode,
-    };
-  }
 
   return {
     explanation: `🪄 **Đã sẵn sàng chức năng Xóa nền cục bộ:**\n- Hỗ trợ tách nền ảnh PNG trong suốt và video phông xanh (Chromakey) thành WebM Transparent.\n- Không cần tài khoản Pro!`,

@@ -157,7 +157,7 @@ export function ChatPanel() {
       </div>
 
       {/* Action Toolbar / Dropdown Menu */}
-      <div class="px-2.5 py-1.5 border-b border-border/50 bg-background/30 flex items-center justify-between gap-2 shrink-0">
+      <div class="px-2.5 py-1.5 border-b border-border/50 bg-background/30 flex items-center gap-2 shrink-0">
         {/* Quick Launch Dropdown */}
         <DropdownMenu placement="bottom-start">
           <DropdownMenuTrigger
@@ -197,28 +197,6 @@ export function ChatPanel() {
             </For>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Top Direct Shortcuts for rapid 1-click execution */}
-        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          <button
-            class="text-[11px] whitespace-nowrap px-2 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer font-medium flex items-center gap-1"
-            disabled={isBusy()}
-            onClick={() => sendMessage("Sinh ảnh AI: một phong cảnh thiên nhiên tuyệt đẹp hùng vĩ lúc hoàng hôn, 8k siêu thực")}
-            title="Sinh ảnh AI ngay lập tức"
-          >
-            <span>🎨</span>
-            <span>Sinh ảnh</span>
-          </button>
-          <button
-            class="text-[11px] whitespace-nowrap px-2 py-1 rounded-md bg-muted/40 hover:bg-primary/20 hover:text-primary hover:border-primary/40 border border-border text-muted-foreground transition-all shrink-0 active:scale-95 disabled:opacity-50 cursor-pointer flex items-center gap-1"
-            disabled={isBusy()}
-            onClick={handleExport}
-            title="Xuất video ngay"
-          >
-            <span>🚀</span>
-            <span>Xuất</span>
-          </button>
-        </div>
       </div>
 
       {/* Message Feed */}
