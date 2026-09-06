@@ -91,20 +91,21 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		shadow: { color: 0x000000, x: 4, y: 5, blur: 0, opacity: 1 },
 	},
 
-	// 02. THE QUICK BROWN FOX (PRO) - Clean white text, modern sans
+	// 02. THE QUICK BROWN FOX (PRO) - Clean white text with vibrant green active word highlight
 	capcut_02: {
 		id: 'capcut_02',
 		name: 'Chữ Trắng Tinh Tế (PRO)',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
 			fontFamily: 'Inter',
-			fontWeight: '700',
+			fontWeight: '800',
 			fontSize: 50,
+			letterSpacing: 0.5,
 			textCase: TextCase.UPPER,
 		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xFFFFFF,
-		shadow: { color: 0x000000, x: 0, y: 3, blur: 6, opacity: 0.7 },
+		activeTextColor: 0x26DD24,
+		shadow: { color: 0x000000, x: 0, y: 2, blur: 4, opacity: 0.75 },
 	},
 
 	// 03. [THE] QUICK BROWN FOX (PRO) - Purple rounded tag box on active word
