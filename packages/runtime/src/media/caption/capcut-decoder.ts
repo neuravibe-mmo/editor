@@ -10,6 +10,7 @@ import {
 import {
 	Paint, Color, Caption, TextRange, Shadow, Opacity, Blur,
 	Offset, Stroke, StrokeStyle, RenderSurface, TextCache, Chars, Computed, TextStyle,
+	Hidden,
 } from '../../traits';
 import { tokenizeText, shapeTokens, renderTokens, applyFont } from '../../utils/text';
 import { colorToHex } from '../../utils/color';
@@ -77,9 +78,16 @@ function drawRoundedBox(
 	strokeColor?: string,
 	strokeWidth = 0,
 	opacity = 1,
+	shadow?: { color: string; blur: number; x: number; y: number },
 ) {
 	ctx.save();
 	ctx.globalAlpha *= opacity;
+	if (shadow) {
+		ctx.shadowColor = shadow.color;
+		ctx.shadowBlur = shadow.blur;
+		ctx.shadowOffsetX = shadow.x;
+		ctx.shadowOffsetY = shadow.y;
+	}
 	ctx.beginPath();
 	if (typeof ctx.roundRect === 'function') {
 		ctx.roundRect(x, y, width, height, radius);
@@ -88,6 +96,9 @@ function drawRoundedBox(
 	}
 	ctx.fillStyle = fillColor;
 	ctx.fill();
+	if (shadow) {
+		ctx.shadowColor = 'transparent';
+	}
 	if (strokeColor && strokeWidth > 0) {
 		ctx.strokeStyle = strokeColor;
 		ctx.lineWidth = strokeWidth;
@@ -273,6 +284,19 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				fill.set(Color, { value: this.config.activeTextColor });
 				appendChild(world, fill, range);
 				this.fill = fill;
+
+				if (this.presetKey === 'capcut_03') {
+					// Active word inside the tag box should be crisp white without dark stroke or shadow
+					const hiddenStroke = createEntity(world);
+					hiddenStroke.add(Stroke);
+					hiddenStroke.add(Hidden);
+					appendChild(world, hiddenStroke, range);
+
+					const hiddenShadow = createEntity(world);
+					hiddenShadow.add(Shadow);
+					hiddenShadow.add(Hidden);
+					appendChild(world, hiddenShadow, range);
+				}
 			}
 		}
 	}
@@ -335,8 +359,18 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				if (activeToken) {
 					const tMinX = activeToken.x;
 					const tMaxX = activeToken.x + activeToken.width;
-					const tMinY = activeToken.y - (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
-					const tMaxY = activeToken.y + (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
+					const isCapcut03 = this.presetKey === 'capcut_03';
+
+					// For capcut_03, use exact token top & bottom to center the box around glyphs
+					const glyphHeight = (activeToken.bottom > activeToken.top)
+						? (activeToken.bottom - activeToken.top)
+						: (activeToken.height > 0 ? activeToken.height : fontSize);
+					const tMinY = isCapcut03
+						? (activeToken.top ?? (activeToken.y - glyphHeight / 2))
+						: activeToken.y - (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
+					const tMaxY = isCapcut03
+						? (activeToken.bottom ?? (activeToken.y + glyphHeight / 2))
+						: activeToken.y + (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
 
 					if (bg.type === 'comic_burst') {
 						const cx = (tMinX + tMaxX) / 2;
@@ -358,6 +392,10 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						const boxY = tMinY - padY;
 						const boxW = Math.max((tMaxX - tMinX) + padX * 2, 40);
 						const boxH = Math.max((tMaxY - tMinY) + padY * 2, 30);
+						const boxBgColor = (isCapcut03 && colors?.[2])
+							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+							: colorToHex(bg.color);
+
 						drawRoundedBox(
 							ctx,
 							boxX,
@@ -365,10 +403,13 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 							boxW,
 							boxH,
 							bg.type === 'pill' ? boxH / 2 : radius,
-							colorToHex(bg.color),
+							boxBgColor,
 							bg.strokeColor !== undefined ? colorToHex(bg.strokeColor) : undefined,
 							bg.strokeWidth ?? 0,
 							bg.opacity ?? 1,
+							isCapcut03
+								? { color: 'rgba(0, 0, 0, 0.4)', blur: 4, x: 0, y: 2 }
+								: undefined,
 						);
 					}
 				}

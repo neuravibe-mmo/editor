@@ -108,26 +108,31 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		shadow: { color: 0x000000, x: 0, y: 2, blur: 4, opacity: 0.75 },
 	},
 
-	// 03. [THE] QUICK BROWN FOX (PRO) - Purple rounded tag box on active word
+	// 03. [THE] QUICK BROWN FOX (PRO) - Lilac rounded tag box on active word, bold white text with solid black outline
 	capcut_03: {
 		id: 'capcut_03',
 		name: 'Hộp Tím Nổi Bật (PRO)',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontSize: 52,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 50,
+			letterSpacing: 0.5,
+			textCase: TextCase.UPPER,
 		},
 		textColor: 0xFFFFFF,
 		activeTextColor: 0xFFFFFF,
-		stroke: { color: 0x000000, width: 2 },
+		stroke: { color: 0x000000, width: 4.5 },
 		background: {
 			type: 'box',
-			color: 0x8B5CF6,
+			color: 0xA479AA,
+			strokeColor: 0x6D4577,
+			strokeWidth: 1.5,
 			radius: 8,
 			paddingX: 14,
 			paddingY: 6,
 			target: 'activeWord',
 		},
-		shadow: { color: 0x000000, x: 0, y: 3, blur: 6, opacity: 0.6 },
 	},
 
 	// 04. THE QUICK - Bold white text with neon lime yellow drop shadow
