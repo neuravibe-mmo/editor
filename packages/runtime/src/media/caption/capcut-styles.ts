@@ -135,15 +135,32 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		},
 	},
 
-	// 04. THE QUICK - Bold white text with neon lime yellow drop shadow
+	// 04. THE QUICK (PRO) - Comic Yellow Box banner with bold red active word, white inactive text with black outline
 	capcut_04: {
 		id: 'capcut_04',
 		name: 'Comic Lime Pop',
-		style: BASE_MONTSERRAT_STYLE,
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontStyle: FontStyle.ITALIC,
+			fontSize: 50,
+			letterSpacing: 0.5,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xFFFFFF,
-		stroke: { color: 0x000000, width: 4 },
-		extrude3D: { color: 0xCCFF00, depth: 6, dirX: 1, dirY: 1 },
+		activeTextColor: 0xEA3C3C,
+		stroke: { color: 0x000000, width: 4.5 },
+		background: {
+			type: 'box',
+			color: 0xE4FF03,
+			strokeColor: 0x000000,
+			strokeWidth: 2,
+			radius: 4,
+			paddingX: 12,
+			paddingY: 6,
+			target: 'activeWord',
+		},
 	},
 
 	// 05. THE - Bubble cloud font with cyan/blue cloud outline and floating bubble particles

@@ -138,6 +138,8 @@ function drawLightningBolt(
 	ctx.restore();
 }
 
+
+
 export class CapCutCaptionDecoder implements CaptionDecoder {
 	public readonly type: CaptionType;
 	public groups: ReturnType<typeof groupBy> = [];
@@ -251,9 +253,16 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 
 		const group = this.groups[groupIndex]!;
-		const wordIndex = group.findIndex(word =>
+		let wordIndex = group.findIndex(word =>
 			relativeTime >= word.start && relativeTime <= word.end
 		);
+		if (wordIndex === -1 && this.presetKey === 'capcut_04' && group.length > 0) {
+			const active = group.findIndex((w, i) =>
+				relativeTime >= w.start && (i === group.length - 1 || relativeTime < group[i + 1]!.start)
+			);
+			if (active !== -1) wordIndex = active;
+			else wordIndex = 0;
+		}
 
 		const text = group.map(w => w.text).join(' ');
 
@@ -285,8 +294,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				appendChild(world, fill, range);
 				this.fill = fill;
 
-				if (this.presetKey === 'capcut_03') {
-					// Active word inside the tag box should be crisp white without dark stroke or shadow
+				if (this.presetKey === 'capcut_03' || this.presetKey === 'capcut_04') {
+					// Active word inside the tag/banner box should be crisp without dark stroke or shadow
 					const hiddenStroke = createEntity(world);
 					hiddenStroke.add(Stroke);
 					hiddenStroke.add(Hidden);
@@ -360,15 +369,17 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					const tMinX = activeToken.x;
 					const tMaxX = activeToken.x + activeToken.width;
 					const isCapcut03 = this.presetKey === 'capcut_03';
+					const isCapcut04 = this.presetKey === 'capcut_04';
+					const isTagBox = isCapcut03 || isCapcut04;
 
-					// For capcut_03, use exact token top & bottom to center the box around glyphs
+					// For capcut_03 & capcut_04, use exact token top & bottom to center the box around glyphs
 					const glyphHeight = (activeToken.bottom > activeToken.top)
 						? (activeToken.bottom - activeToken.top)
 						: (activeToken.height > 0 ? activeToken.height : fontSize);
-					const tMinY = isCapcut03
+					const tMinY = isTagBox
 						? (activeToken.top ?? (activeToken.y - glyphHeight / 2))
 						: activeToken.y - (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
-					const tMaxY = isCapcut03
+					const tMaxY = isTagBox
 						? (activeToken.bottom ?? (activeToken.y + glyphHeight / 2))
 						: activeToken.y + (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
 
@@ -388,11 +399,31 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 							bg.strokeWidth ?? 0,
 						);
 					} else {
-						const boxX = tMinX - padX;
-						const boxY = tMinY - padY;
-						const boxW = Math.max((tMaxX - tMinX) + padX * 2, 40);
-						const boxH = Math.max((tMaxY - tMinY) + padY * 2, 30);
-						const boxBgColor = (isCapcut03 && colors?.[2])
+						let scale = 1;
+						if (isCapcut04 && this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
+							const activeWordData = this.groups[this.currentGroupIndex]?.[this.currentWordIndex];
+							if (activeWordData) {
+								const elapsed = this.lastRelativeTime - activeWordData.start;
+								const animDuration = 0.15;
+								if (elapsed >= 0 && elapsed < animDuration) {
+									const progress = elapsed / animDuration;
+									scale = 1 + 0.15 * Math.cos((progress * Math.PI) / 2);
+								}
+							}
+						}
+
+						const cx = (tMinX + tMaxX) / 2;
+						const cy = (tMinY + tMaxY) / 2;
+						const baseW = Math.max((tMaxX - tMinX) + padX * 2, 40);
+						const baseH = Math.max((tMaxY - tMinY) + padY * 2, 30);
+						const boxW = baseW * scale;
+						const boxH = baseH * scale;
+						const boxX = cx - boxW / 2;
+						const boxY = cy - boxH / 2;
+
+						const boxBgColor = (isCapcut04 && colors?.[3])
+							? (typeof colors[3] === 'string' ? colors[3] : colorToHex(colors[3]))
+							: (isCapcut03 && colors?.[2])
 							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
 							: colorToHex(bg.color);
 
@@ -470,17 +501,29 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		if (this.config.extrude3D) {
 			const extrude = this.config.extrude3D;
 			const depth = extrude.depth;
-			const dirX = extrude.dirX ?? 1;
+			const dirX = extrude.dirX ?? 0.5;
 			const dirY = extrude.dirY ?? 1;
 			const extrudeHex = colorToHex(extrude.color);
+			const strokeWidth = this.config.stroke?.width ?? 4;
 
 			ctx.save();
-			for (const word of words) {
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
 				applyFont(ctx, world, entity, word.ranges);
+				ctx.textAlign = 'start';
+				ctx.textBaseline = 'top';
+
+				// 1. Draw solid dark outline at bottom of the extrusion for comic depth
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = strokeWidth + 2;
+				ctx.lineJoin = 'round';
+				ctx.lineCap = 'round';
+				ctx.strokeText(word.chars, word.x + depth * dirX, word.y + depth * dirY);
+
+				// 2. Draw the 3D lime extrusion layers
 				ctx.fillStyle = extrudeHex;
 				ctx.strokeStyle = extrudeHex;
-				ctx.lineWidth = (this.config.stroke?.width ?? 4) + 1;
-				ctx.lineJoin = 'round';
+				ctx.lineWidth = strokeWidth;
 
 				for (let d = depth; d >= 1; d--) {
 					ctx.strokeText(word.chars, word.x + d * dirX, word.y + d * dirY);
@@ -496,6 +539,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.save();
 			for (const word of words) {
 				applyFont(ctx, world, entity, word.ranges);
+				ctx.textAlign = 'start';
+				ctx.textBaseline = 'top';
 				ctx.strokeStyle = colorToHex(outer.color);
 				ctx.lineWidth = outer.width;
 				ctx.lineJoin = 'round';
@@ -513,6 +558,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.shadowBlur = glow.blur;
 			for (const word of words) {
 				applyFont(ctx, world, entity, word.ranges);
+				ctx.textAlign = 'start';
+				ctx.textBaseline = 'top';
 				ctx.fillStyle = glow.color;
 				ctx.fillText(word.chars, word.x, word.y);
 			}
@@ -569,6 +616,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		} else {
 			renderTokens(ctx, world, entity);
 		}
+
+
 	}
 
 	public dispose(): void {
