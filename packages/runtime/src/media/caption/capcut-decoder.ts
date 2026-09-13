@@ -190,7 +190,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 	private readonly asset: Asset;
 	private readonly presetKey: string;
-	private readonly config: CapCutPresetConfig;
+	private config: CapCutPresetConfig;
 
 	private currentGroupIndex = -1;
 	private currentWordIndex = -1;
@@ -260,7 +260,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 
 		// Soft or Hard Shadow
-		if (this.config.shadow && !this.config.bubbleCloud) {
+		if (this.config.shadow && !this.config.bubbleCloud && !this.config.rainbowLetters) {
 			const shadow = createEntity(world);
 			shadow.add(Shadow);
 			shadow.add(Color);
@@ -297,12 +297,12 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		let wordIndex = group.findIndex(word =>
 			relativeTime >= word.start && relativeTime <= word.end
 		);
-		if (wordIndex === -1 && this.presetKey === 'capcut_04' && group.length > 0) {
+		if (wordIndex === -1 && group.length > 0) {
 			const active = group.findIndex((w, i) =>
 				relativeTime >= w.start && (i === group.length - 1 || relativeTime < group[i + 1]!.start)
 			);
 			if (active !== -1) wordIndex = active;
-			else wordIndex = 0;
+			else if (this.presetKey === 'capcut_04') wordIndex = 0;
 		}
 
 		const text = group.map(w => w.text).join(' ');
@@ -316,7 +316,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			this.fill = null;
 			this.range = null;
 
-			if (wordIndex !== -1 && this.config.activeTextColor !== undefined) {
+			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !this.config.rainbowLetters) {
 				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
 				const end = start + group[wordIndex]!.text.length;
 				const range = createEntity(world);
@@ -355,6 +355,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		const ctx = world.get(RenderSurface)?.ctx;
 		if (!ctx) return;
 
+		this.config = CAPCUT_PRESET_CONFIGS[this.presetKey] ?? this.config;
+
 		// If ready now but was uninitialized during earlier seek, re-seek
 		if (this.currentGroupIndex === -1 && this.ready && this.groups.length > 0) {
 			this.seekTo(world, entity, this.lastRelativeTime);
@@ -363,13 +365,19 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		const chars = store(world, Computed).chars[entity.id()] ?? store(world, Chars).value[entity.id()] ?? '';
 		if (!chars || !chars.trim()) return;
 
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10');
+		const isNoShadowPreset = (!this.config.shadow || this.config.bubbleCloud || isNeonPreset || !!this.config.rainbowLetters);
+
 		// Proactively remove stale Shadow/Stroke child entities or update them to preset's current style
-		if (this.config.bubbleCloud || !this.config.shadow) {
+		if (isNoShadowPreset) {
+			if (entity.has(Shadow)) {
+				entity.remove(Shadow);
+			}
 			for (const child of world.query(ChildOf(entity))) {
 				if (!child.has(Source) && child.has(Shadow)) {
 					deleteEntity(world, child);
 				}
-				if (this.config.bubbleCloud && !child.has(Source) && child.has(Stroke)) {
+				if ((this.config.bubbleCloud || isNeonPreset || this.config.rainbowLetters) && !child.has(Source) && child.has(Stroke)) {
 					deleteEntity(world, child);
 				}
 			}
@@ -392,9 +400,11 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		const activeColor = colors?.[0] ?? this.config.activeTextColor;
 		const baseColor = colors?.[1] ?? this.config.textColor;
 
-		if (this.config.stroke && !this.config.bubbleCloud) {
+		if (this.config.stroke && !this.config.bubbleCloud && !isNeonPreset && !this.config.rainbowLetters) {
+			let foundStroke = false;
 			for (const child of world.query(ChildOf(entity))) {
 				if (!child.has(Source) && child.has(Stroke)) {
+					foundStroke = true;
 					const parsed = colors?.[2] !== undefined
 						? (parseColor(colors[2]) ?? this.config.stroke.color)
 						: this.config.stroke.color;
@@ -403,6 +413,22 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						store(world, StrokeStyle).width[child.id()] = this.config.stroke.width;
 					}
 				}
+			}
+
+			if (!foundStroke) {
+				const stroke = createEntity(world);
+				stroke.add(Stroke);
+				stroke.add(Paint);
+				stroke.set(Paint, { value: PaintType.SOLID });
+				stroke.add(Color);
+				stroke.set(Color, { value: this.config.stroke.color });
+				stroke.add(StrokeStyle);
+				stroke.set(StrokeStyle, {
+					width: this.config.stroke.width,
+					join: StrokeJoin.ROUND,
+					cap: StrokeCap.ROUND,
+				});
+				appendChild(world, stroke, entity);
 			}
 		}
 
@@ -651,26 +677,35 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.restore();
 		}
 
-		// 4. Draw Neon Glow Aura
-		if (this.config.glow) {
+		// 4. Draw Neon / Ambient Glow Aura (only if not handled by drawAnimatedWords)
+		if (this.config.glow && !this.config.animation) {
 			const glow = this.config.glow;
 			ctx.save();
 			ctx.shadowColor = glow.color;
 			ctx.shadowBlur = glow.blur;
-			for (const word of words) {
+			ctx.textAlign = 'start';
+			ctx.textBaseline = 'top';
+
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
+				const isActive = (wIdx === this.currentWordIndex) || (words.length === 1);
+				if (this.presetKey === 'capcut_09' && !isActive) continue;
+
 				applyFont(ctx, world, entity, word.ranges);
-				ctx.textAlign = 'start';
-				ctx.textBaseline = 'top';
 				ctx.fillStyle = glow.color;
+				ctx.globalAlpha = 0.6;
 				ctx.fillText(word.chars, word.x, word.y);
 			}
 			ctx.restore();
 		}
 
-		// 5. Final render: Rainbow Candy Letters & Stickers OR Bubble Cloud OR Standard Text Tokens
-		if (this.config.rainbowLetters) {
-			const palette = this.config.rainbowLetters.palette.map(c => colorToHex(c));
-			const fontSize = this.config.style.fontSize ?? 58;
+		// 5. Draw Motion Echo Trail (Preset 08 & Echo Styles)
+		if (this.config.echoTrail) {
+			const echo = this.config.echoTrail;
+			const steps = echo.steps ?? 3;
+			const baseDistance = echo.distance ?? 30;
+			const maxOpacity = echo.opacity ?? 0.52;
+			const dirSign = echo.direction === 'left' ? -1 : 1;
 
 			ctx.save();
 			ctx.textAlign = 'start';
@@ -678,10 +713,106 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 			for (let wIdx = 0; wIdx < words.length; wIdx++) {
 				const word = words[wIdx]!;
+				const isActive = (wIdx === this.currentWordIndex) || (words.length === 1);
+				if (echo.target === 'activeWord' && !isActive) continue;
+
 				applyFont(ctx, world, entity, word.ranges);
 
-				// Kinetic lightning stickers around active word
-				if (this.config.rainbowLetters.stickers && (wIdx === this.currentWordIndex || words.length === 1)) {
+				// Dynamic expansion during active word speech
+				let dist = baseDistance;
+				if (isActive && this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
+					const activeWordData = this.groups[this.currentGroupIndex]?.[this.currentWordIndex];
+					if (activeWordData) {
+						const elapsed = Math.max(0, this.lastRelativeTime - activeWordData.start);
+						const wordDur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						const progress = Math.min(1, elapsed / wordDur);
+						dist = baseDistance * (0.8 + 0.35 * Math.sin(progress * Math.PI * 0.5));
+					}
+				}
+
+				const trailColor = isActive
+					? (activeColor !== undefined ? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor)) : '#EF4444')
+					: (echo.color !== undefined ? colorToHex(echo.color) : '#A3A3A3');
+
+				for (let s = steps; s >= 1; s--) {
+					const factor = s / steps;
+					const offsetX = dist * factor * dirSign;
+					const alpha = maxOpacity * (1 - (s - 1) / steps);
+
+					ctx.save();
+					ctx.globalAlpha = alpha;
+
+					// Stroke for the ghost echo
+					ctx.strokeStyle = '#000000';
+					ctx.lineWidth = Math.max(2, (this.config.stroke?.width ?? 4) - 1);
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(word.chars, word.x + offsetX, word.y);
+
+					// Fill for the ghost echo
+					ctx.fillStyle = trailColor;
+					ctx.fillText(word.chars, word.x + offsetX, word.y);
+					ctx.restore();
+				}
+			}
+			ctx.restore();
+		}
+
+		// 6. Final render: Rainbow Candy Letters & Stickers OR Bubble Cloud OR Animated Words OR Standard Text Tokens
+		if (this.config.rainbowLetters) {
+			const palette = this.config.rainbowLetters.palette.map(c => colorToHex(c));
+			const fontSize = this.config.style.fontSize ?? 58;
+			const anim = this.config.animation;
+			const strokeWidth = this.config.stroke?.width ?? 5.5;
+
+			ctx.save();
+			ctx.textAlign = 'start';
+			ctx.textBaseline = 'top';
+
+			const activeWordData = (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0)
+				? this.groups[this.currentGroupIndex]?.[this.currentWordIndex]
+				: null;
+
+			let charCounter = 0;
+
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
+				const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
+				const isFuture = (this.currentWordIndex !== -1 && wIdx > this.currentWordIndex);
+
+				applyFont(ctx, world, entity, word.ranges);
+
+				let scale = 1.0;
+				let offsetY = 0;
+
+				if (isActive && anim?.scalePop) {
+					const maxScale = anim.scalePop;
+					let progress = 0.5;
+					if (activeWordData) {
+						const elapsed = this.lastRelativeTime - activeWordData.start;
+						const dur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						progress = Math.max(0, Math.min(1, elapsed / dur));
+					}
+					const pop = Math.sin(progress * Math.PI);
+					scale = 1.0 + (maxScale - 1.0) * pop;
+					offsetY = -((scale - 1.0) * fontSize * 0.28);
+				}
+
+				ctx.save();
+				if (isFuture && anim?.dimUpcoming) {
+					const dimAlpha = typeof anim.dimUpcoming === 'number' ? anim.dimUpcoming : 0.5;
+					ctx.globalAlpha *= dimAlpha;
+				}
+
+				const wordCenterX = word.x + word.width / 2;
+				const wordCenterY = word.y + (word.height > 0 ? word.height : fontSize) / 2;
+
+				ctx.translate(wordCenterX, wordCenterY + offsetY);
+				ctx.scale(scale, scale);
+				ctx.translate(-wordCenterX, -wordCenterY);
+
+				// Kinetic lightning stickers around active word (if enabled)
+				if (this.config.rainbowLetters.stickers && isActive) {
 					const boltSize = Math.max(fontSize * 0.38, 22);
 					drawLightningBolt(ctx, word.x - boltSize * 0.7, word.y - boltSize * 0.2, boltSize, -0.25);
 					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.7, word.y - boltSize * 0.2, boltSize, 0.25);
@@ -689,39 +820,258 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.5, word.y + fontSize * 0.85, boltSize * 0.85, 0.35);
 				}
 
-				// Draw each character with cyclic rainbow candy gradient and outline
+				// Draw each character with cyclic rainbow candy gradient and solid outline (NO shadow)
 				for (let i = 0; i < word.chars.length; i++) {
 					const char = word.chars[i]!;
 					const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
 					const charX = word.x + charAdvance;
-					const color = palette[i % palette.length]!;
+					const color = palette[charCounter % palette.length]!;
+					charCounter++;
 
-					// Black outline
+					// Ensure no drop shadow is applied
+					ctx.shadowColor = 'transparent';
+					ctx.shadowBlur = 0;
+					ctx.shadowOffsetX = 0;
+					ctx.shadowOffsetY = 0;
+
+					// Crisp black outline
 					ctx.strokeStyle = '#000000';
-					ctx.lineWidth = 5;
+					ctx.lineWidth = strokeWidth;
 					ctx.lineJoin = 'round';
 					ctx.lineCap = 'round';
+					ctx.miterLimit = 2;
 					ctx.strokeText(char, charX, word.y);
 
 					// Glossy candy fill
-					const grad = ctx.createLinearGradient(charX, word.y, charX, word.y + fontSize);
+					const charH = word.height > 0 ? word.height : fontSize;
+					const grad = ctx.createLinearGradient(charX, word.y, charX, word.y + charH);
 					grad.addColorStop(0, '#FFFFFF');
-					grad.addColorStop(0.25, color);
+					grad.addColorStop(0.22, color);
 					grad.addColorStop(1, color);
 
 					ctx.fillStyle = grad;
 					ctx.fillText(char, charX, word.y);
 				}
+
+				ctx.restore();
 			}
 			ctx.restore();
 		} else if (this.config.bubbleCloud) {
 			this.drawBubbleCloud(ctx, world, entity, words);
+		} else if (this.config.animation || this.config.glow) {
+			this.drawAnimatedWords(ctx, world, entity, words, activeColor, baseColor, colors);
+			if (this.config.royalStars) {
+				this.drawRoyalStars(ctx, words);
+			}
 		} else {
 			renderTokens(ctx, world, entity);
 			if (this.config.royalStars) {
 				this.drawRoyalStars(ctx, words);
 			}
 		}
+	}
+
+	private drawAnimatedWords(
+		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+		world: World,
+		entity: Entity,
+		words: Array<{ chars: string; x: number; y: number; width: number; height: number; ranges: Entity[] }>,
+		activeColor: string | number | undefined,
+		baseColor: string | number | undefined,
+		colors?: Array<string | number>,
+	): void {
+		const anim = this.config.animation;
+		const fontSize = this.config.style.fontSize ?? 54;
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10');
+
+		const activeAccent = (activeColor !== undefined)
+			? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
+			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#FF7A00');
+
+		ctx.save();
+		ctx.textAlign = 'start';
+		ctx.textBaseline = 'top';
+
+		const activeWordData = (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0)
+			? this.groups[this.currentGroupIndex]?.[this.currentWordIndex]
+			: null;
+
+		for (let wIdx = 0; wIdx < words.length; wIdx++) {
+			const word = words[wIdx]!;
+			const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
+			const isFuture = (this.currentWordIndex !== -1 && wIdx > this.currentWordIndex);
+
+			// Calculate scale & glow pulse
+			let scale = 1.0;
+			let glowAlpha = 0.85;
+			let glowBlur = this.config.glow?.blur ?? 22;
+
+			if (isActive && anim?.scalePop) {
+				const maxPop = anim.scalePop ?? 1.32;
+				if (activeWordData) {
+					const elapsed = Math.max(0, this.lastRelativeTime - activeWordData.start);
+					const wordDur = Math.max(0.12, activeWordData.end - activeWordData.start);
+
+					if (elapsed <= wordDur) {
+						const popDur = Math.min(0.18, wordDur * 0.45);
+						if (elapsed < popDur) {
+							// Punchy elastic entrance pop from 1.0 to maxPop (1.32x)
+							const p = elapsed / popDur;
+							scale = 1.0 + (maxPop - 1.0) * Math.sin(p * Math.PI * 0.75);
+						} else {
+							// Remains prominently enlarged (1.20x - 1.25x) throughout speech duration
+							const remainP = (elapsed - popDur) / Math.max(0.01, wordDur - popDur);
+							const resting = 1.0 + (maxPop - 1.0) * 0.65;
+							scale = resting + 0.04 * Math.sin(remainP * Math.PI * 2);
+						}
+
+						if (anim.glowPulse) {
+							const pulseP = (elapsed / 0.25) * Math.PI;
+							glowAlpha = 0.75 + 0.25 * Math.sin(pulseP);
+							glowBlur = (this.config.glow?.blur ?? 22) * (1 + 0.25 * Math.sin(pulseP));
+						}
+					} else {
+						// Smooth exit settlement back to 1.0 within 0.08s
+						const exitElapsed = elapsed - wordDur;
+						if (exitElapsed < 0.08) {
+							scale = 1.0 + ((maxPop - 1.0) * 0.65) * (1.0 - exitElapsed / 0.08);
+						}
+					}
+				} else {
+					scale = 1.22;
+				}
+			}
+
+			// Word opacity: dim upcoming words if configured (preset 09 keeps crisp 1.0)
+			let wordAlpha = 1.0;
+			if (isFuture && anim?.dimUpcoming) {
+				wordAlpha = typeof anim.dimUpcoming === 'number' ? anim.dimUpcoming : 0.4;
+			}
+
+			const cx = word.x + word.width / 2;
+			const cy = word.y + (word.height > 0 ? word.height : fontSize) / 2;
+
+			ctx.save();
+			if (scale !== 1.0) {
+				ctx.translate(cx, cy);
+				ctx.scale(scale, scale);
+				ctx.translate(-cx, -cy);
+			}
+			ctx.globalAlpha = wordAlpha;
+
+			applyFont(ctx, world, entity, word.ranges);
+
+			// ── LAYER 1: Ambient Glow Aura ──
+			if (this.config.glow) {
+				if (isActive) {
+					// Active neon glow (Electric Cyan for preset 10, Radiant Orange for preset 09)
+					ctx.save();
+					ctx.shadowColor = activeAccent;
+					ctx.shadowBlur = glowBlur;
+					ctx.fillStyle = activeAccent;
+					ctx.globalAlpha = wordAlpha * glowAlpha;
+					ctx.fillText(word.chars, word.x, word.y);
+					// Second pass for intense radiant neon core
+					ctx.shadowBlur = glowBlur * 1.6;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (this.presetKey === 'capcut_10') {
+					// Radiant Hot Pink Neon Glow for inactive words in Preset 10!
+					const pinkColor = (colors?.[1] !== undefined)
+						? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
+						: '#FF2A85';
+					ctx.save();
+					ctx.shadowColor = pinkColor;
+					ctx.shadowBlur = 18;
+					ctx.fillStyle = pinkColor;
+					ctx.globalAlpha = 0.85;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.shadowBlur = 28;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (this.presetKey === 'capcut_09') {
+					// Soft ambient halo for inactive words in Preset 09
+					ctx.save();
+					ctx.shadowColor = 'rgba(255, 255, 255, 0.45)';
+					ctx.shadowBlur = 8;
+					ctx.fillStyle = '#FFFFFF';
+					ctx.globalAlpha = 0.35;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.restore();
+				}
+			}
+
+			// ── LAYER 2: Shadow (if preset config defines a drop shadow, skipped for neon presets) ──
+			if (this.config.shadow && !this.config.bubbleCloud && !isNeonPreset) {
+				ctx.save();
+				ctx.shadowColor = colorToHex(this.config.shadow.color);
+				ctx.shadowBlur = this.config.shadow.blur;
+				ctx.shadowOffsetX = this.config.shadow.x;
+				ctx.shadowOffsetY = this.config.shadow.y;
+				ctx.fillStyle = colorToHex(this.config.shadow.color);
+				ctx.globalAlpha = wordAlpha * (this.config.shadow.opacity ?? 1);
+				ctx.fillText(word.chars, word.x, word.y);
+				ctx.restore();
+			}
+
+			// ── LAYER 3: Stroke (Outline) ──
+			const skipStroke = isActive && (this.presetKey === 'capcut_03' || this.presetKey === 'capcut_04' || this.presetKey === 'capcut_07');
+			if (!skipStroke) {
+				if (isActive && isNeonPreset) {
+					// Glowing luminous neon outline around the white core (Cyan for preset 10, Orange for preset 09)
+					ctx.save();
+					ctx.strokeStyle = activeAccent;
+					ctx.lineWidth = 4;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (!isActive && this.presetKey === 'capcut_10') {
+					// Radiant Hot Pink Neon Outline for inactive words in Preset 10 (NO black stroke!)
+					const pinkColor = (colors?.[1] !== undefined)
+						? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
+						: '#FF2A85';
+					ctx.save();
+					ctx.strokeStyle = pinkColor;
+					ctx.lineWidth = 3.5;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (this.config.stroke && !this.config.bubbleCloud) {
+					// Clean crisp dark stroke on inactive words for other presets
+					ctx.save();
+					const strokeColorHex = (colors?.[2] !== undefined)
+						? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+						: colorToHex(this.config.stroke.color);
+					ctx.strokeStyle = strokeColorHex;
+					ctx.lineWidth = this.config.stroke.width;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(word.chars, word.x, word.y);
+					ctx.restore();
+				}
+			}
+
+			// ── LAYER 4: Glyph Fill ──
+			ctx.save();
+			if (isNeonPreset) {
+				// Neon presets have a luminous white-hot core for both active and inactive!
+				ctx.fillStyle = '#FFFFFF';
+				ctx.fillText(word.chars, word.x, word.y);
+			} else {
+				const wordFill = isActive
+					? activeAccent
+					: (baseColor !== undefined ? (typeof baseColor === 'string' ? baseColor : colorToHex(baseColor)) : '#FFFFFF');
+				ctx.fillStyle = wordFill;
+				ctx.fillText(word.chars, word.x, word.y);
+			}
+			ctx.restore();
+
+			ctx.restore();
+		}
+
+		ctx.restore();
 	}
 
 	private drawBubbleCloud(

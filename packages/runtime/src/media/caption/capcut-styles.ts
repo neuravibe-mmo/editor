@@ -52,6 +52,24 @@ export interface CapCutRoyalStarsConfig {
 	glowColor?: string;
 }
 
+export interface CapCutEchoTrailConfig {
+	color?: number;
+	opacity?: number;
+	steps?: number;
+	distance?: number;
+	direction?: 'right' | 'left';
+	target?: 'all' | 'activeWord';
+}
+
+export interface CapCutAnimationConfig {
+	/** Scale multiplier for the currently spoken active word (e.g. 1.22 for 22% pop) */
+	scalePop?: number;
+	/** Whether to dim upcoming words in the current phrase (e.g. 0.4 opacity) */
+	dimUpcoming?: boolean | number;
+	/** Whether the active word glow should pulse with speech */
+	glowPulse?: boolean;
+}
+
 export interface CapCutPresetConfig {
 	id: string;
 	name: string;
@@ -79,6 +97,8 @@ export interface CapCutPresetConfig {
 	rainbowLetters?: CapCutRainbowConfig;
 	bubbleCloud?: CapCutBubbleCloudConfig;
 	royalStars?: CapCutRoyalStarsConfig;
+	echoTrail?: CapCutEchoTrailConfig;
+	animation?: CapCutAnimationConfig;
 }
 
 const BASE_MONTSERRAT_STYLE: CaptionPresetStyle = {
@@ -175,6 +195,10 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 			paddingY: 6,
 			target: 'activeWord',
 		},
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.4,
+		},
 	},
 
 	// 05. THE - Bubble cloud font with cyan/blue cloud outline and floating bubble particles
@@ -246,59 +270,107 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		},
 	},
 
-	// 08. THE - Sleek translucent black rounded pill
+	// 08. Vệt Đỏ Điện Ảnh (Echo Motion Trail) - White text with black outline, vibrant red active word with horizontal motion echo trail
 	capcut_08: {
 		id: 'capcut_08',
-		name: 'Hộp Đen Tối Giản',
+		name: 'Vệt Đỏ Điện Ảnh',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontSize: 50,
+			fontWeight: '900',
+			fontSize: 54,
+			letterSpacing: 2,
 		},
 		textColor: 0xFFFFFF,
-		background: {
-			type: 'pill',
-			color: 0x000000,
-			opacity: 0.65,
-			paddingX: 18,
-			paddingY: 8,
-			target: 'all',
+		activeTextColor: 0xEF4444,
+		stroke: { color: 0x000000, width: 4.5 },
+		echoTrail: {
+			steps: 3,
+			distance: 30,
+			opacity: 0.52,
+			target: 'activeWord',
+		},
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.4,
 		},
 	},
 
-	// 09. THE QUICK BROWN FOX JUMPS OVER - Soft white ambient glow + warm orange highlight
+	// 09. THE QUICK BROWN FOX JUMPS OVER - Soft warm ambient aura + vibrant orange highlight
 	capcut_09: {
 		id: 'capcut_09',
 		name: 'Phụ Đề Phát Sáng Cam',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontSize: 48,
+			fontWeight: '900',
+			fontSize: 54,
+			letterSpacing: 2,
 		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xF97316,
-		glow: { color: '#FFFFFF', blur: 14 },
-		shadow: { color: 0xEA580C, x: 0, y: 3, blur: 10, opacity: 0.8 },
+		activeTextColor: 0xFF7A00,
+		stroke: { color: 0x000000, width: 3.5 },
+		glow: { color: '#FF7A00', blur: 22 },
+		animation: {
+			scalePop: 1.32,
+			dimUpcoming: false,
+			glowPulse: true,
+		},
 	},
 
 	// 10. THE QUICK BROWN - Dual Neon Glow (Pink neon + Cyan neon)
 	capcut_10: {
 		id: 'capcut_10',
 		name: 'Neon Hồng Xanh',
-		style: BASE_MONTSERRAT_STYLE,
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Nunito',
+			fontWeight: '900',
+			fontSize: 54,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0xFF2A85,
 		activeTextColor: 0x00F0FF,
-		stroke: { color: 0x1E1B4B, width: 3 },
-		glow: { color: '#00F0FF', blur: 20 },
+		stroke: { color: 0xFF2A85, width: 3.5 },
+		glow: { color: '#00F0FF', blur: 24 },
+		animation: {
+			scalePop: 1.30,
+			dimUpcoming: false,
+			glowPulse: true,
+		},
 	},
 
-	// 11. THE QUICK BROWN FOX - Carnival Fire gradient
+	// 11. OVER THE LAZY DOG - Multi-color Rainbow Candy Letters with active bounce pop & NO shadow
 	capcut_11: {
 		id: 'capcut_11',
-		name: 'Hỏa Tiễn Rực Lửa',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0xFFFFFF,
-		activeTextColor: 0xEF4444,
-		stroke: { color: 0x000000, width: 5 },
-		shadow: { color: 0x9A3412, x: 3, y: 3, blur: 0 },
+		name: 'Kẹo Ngọt Đa Sắc',
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xFF9900,
+		activeTextColor: 0xFF3366,
+		stroke: { color: 0x000000, width: 5.5 },
+		rainbowLetters: {
+			palette: [
+				0xFF9900, // Vibrant Orange
+				0x00D2FF, // Electric Cyan
+				0xFF3366, // Hot Candy Pink/Red
+				0x22C55E, // Fresh Lime Green
+				0xFFCC00, // Bright Sunshine Yellow
+				0x9933FF, // Vivid Violet/Purple
+				0x00B4D8, // Deep Sky Blue
+				0xFF5E00, // Rich Tangerine
+			],
+			stickers: false,
+		},
+		animation: {
+			scalePop: 1.24,
+			dimUpcoming: 0.5,
+		},
 	},
 
 	// 12. THE QUICK - Neon Rainbow Candy with Lightning Stickers
@@ -309,13 +381,20 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 			...BASE_MONTSERRAT_STYLE,
 			fontStyle: FontStyle.ITALIC,
 			fontWeight: '900',
-			fontSize: 66,
+			fontSize: 62,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
 		},
 		textColor: 0xFFFFFF,
 		activeTextColor: 0xFFD000,
+		stroke: { color: 0x000000, width: 5 },
 		rainbowLetters: {
 			palette: [0xFFB800, 0x22C55E, 0x06B6D4, 0xEC4899, 0xF97316],
-			stickers: true,
+			stickers: false,
+		},
+		animation: {
+			scalePop: 1.20,
+			dimUpcoming: 0.5,
 		},
 	},
 
