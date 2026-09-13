@@ -45,11 +45,26 @@ export function getWebFonts(): types.FontSources[] {
 
 export async function loadWebFont(
 	world: World,
-	family: keyof typeof WebFonts,
+	family: string,
 	style: FontStyle = FontStyle.NORMAL,
 	weight?: string,
-): Promise<types.FontSource> {
-	const source = `url(${WebFonts[family].url})`;
+): Promise<types.FontSource | null> {
+	if (family.includes(',')) {
+		const names = family.split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+		let first: types.FontSource | null = null;
+		for (const name of names) {
+			if (name in WebFonts) {
+				const res = await loadWebFont(world, name as keyof typeof WebFonts, style, weight);
+				if (!first) first = res;
+			}
+		}
+		return first;
+	}
+
+	const webFont = WebFonts[family as keyof typeof WebFonts];
+	if (!webFont) return null;
+
+	const source = `url(${webFont.url})`;
 	const font: types.FontSource = {
 		source,
 		family,

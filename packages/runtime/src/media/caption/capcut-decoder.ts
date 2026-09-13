@@ -205,11 +205,13 @@ function drawElectricSpark(
 	x: number,
 	y: number,
 	size: number,
+	color = '#FFFFFF',
+	shadowColor = '#00F2FF',
 ): void {
 	ctx.save();
 	ctx.translate(x, y);
-	ctx.shadowColor = 'rgba(255, 240, 100, 0.9)';
-	ctx.shadowBlur = 8;
+	ctx.shadowColor = shadowColor;
+	ctx.shadowBlur = 10;
 	ctx.shadowOffsetX = 0;
 	ctx.shadowOffsetY = 0;
 
@@ -222,11 +224,116 @@ function drawElectricSpark(
 	ctx.quadraticCurveTo(0, 0, 0, -size);
 	ctx.closePath();
 
-	ctx.fillStyle = '#FFF59D';
-	ctx.strokeStyle = '#000000';
-	ctx.lineWidth = 1.6;
-	ctx.stroke();
+	ctx.fillStyle = color;
+	ctx.strokeStyle = shadowColor;
+	ctx.lineWidth = 1.2;
 	ctx.fill();
+	ctx.stroke();
+	ctx.restore();
+}
+
+function drawElectricLightningCrackles(
+	ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	time: number,
+	neonColor = '#00F2FF',
+): void {
+	ctx.save();
+	const t = time * 22;
+	const j1 = Math.sin(t * 1.5) * 4;
+	const j2 = Math.cos(t * 2.2) * 4.5;
+	const j3 = Math.sin(t * 2.9) * 3.8;
+
+	const topY = y - height * 0.82;
+	const midY = y - height * 0.45;
+	const botY = y + height * 0.04;
+
+	// Jagged arc across the upper crest of the active word
+	const pts1 = [
+		{ x: x - 8, y: topY + 4 + j1 },
+		{ x: x + width * 0.28, y: topY - 7 + j2 },
+		{ x: x + width * 0.54, y: topY + 6 + j3 },
+		{ x: x + width * 0.78, y: topY - 8 + j1 },
+		{ x: x + width + 10, y: topY + 2 + j2 },
+	];
+
+	// Secondary branch along the lower right
+	const pts2 = [
+		{ x: x + width * 0.62, y: botY - 8 },
+		{ x: x + width * 0.84, y: botY + 8 + j2 },
+		{ x: x + width + 12, y: botY - 2 + j1 },
+	];
+
+	const drawPath = (pts: Array<{ x: number; y: number }>) => {
+		ctx.beginPath();
+		ctx.moveTo(pts[0]!.x, pts[0]!.y);
+		for (let i = 1; i < pts.length; i++) {
+			ctx.lineTo(pts[i]!.x, pts[i]!.y);
+		}
+	};
+
+	// Pass 1: Outer radiant neon electric glow
+	ctx.save();
+	ctx.shadowColor = neonColor;
+	ctx.shadowBlur = 14;
+	ctx.shadowOffsetX = 0;
+	ctx.shadowOffsetY = 0;
+	ctx.strokeStyle = neonColor;
+	ctx.lineWidth = 3.5;
+	ctx.lineJoin = 'miter';
+	ctx.lineCap = 'round';
+	drawPath(pts1);
+	ctx.stroke();
+	drawPath(pts2);
+	ctx.stroke();
+	ctx.restore();
+
+	// Pass 2: White-hot crackle core
+	ctx.save();
+	ctx.strokeStyle = '#FFFFFF';
+	ctx.lineWidth = 1.4;
+	ctx.lineJoin = 'miter';
+	ctx.lineCap = 'round';
+	drawPath(pts1);
+	ctx.stroke();
+	drawPath(pts2);
+	ctx.stroke();
+	ctx.restore();
+
+	// Flanking luminous diamond plasma sparks
+	const sparkSize = Math.max(height * 0.16, 7);
+	drawElectricSpark(ctx, x - 12, midY + j1, sparkSize, '#FFFFFF', neonColor);
+	drawElectricSpark(ctx, x + width + 14, midY + j2, sparkSize * 0.9, '#FFFFFF', neonColor);
+	drawElectricSpark(ctx, x + width * 0.48, topY - 10 + j3, sparkSize * 0.75, '#FFFFFF', neonColor);
+
+	ctx.restore();
+}
+
+function drawConfettiSprinkle(
+	ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+	cx: number,
+	cy: number,
+	radius: number,
+	color: string,
+): void {
+	ctx.save();
+	ctx.beginPath();
+	ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+	ctx.fillStyle = color;
+	ctx.strokeStyle = '#000000';
+	ctx.lineWidth = Math.max(radius * 0.35, 1.6);
+	ctx.fill();
+	ctx.stroke();
+
+	// White gloss reflection dot
+	ctx.beginPath();
+	ctx.arc(cx - radius * 0.28, cy - radius * 0.28, radius * 0.28, 0, Math.PI * 2);
+	ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+	ctx.fill();
+
 	ctx.restore();
 }
 
@@ -293,7 +400,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 		entity.set(Paint, { value: PaintType.SOLID });
 
-		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
 
 		// Inner/Main Stroke
 		if (this.config.stroke && !this.config.bubbleCloud && !isNeonPreset && !this.config.rainbowLetters) {
@@ -369,7 +476,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			this.fill = null;
 			this.range = null;
 
-			const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+			const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
 			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !this.config.rainbowLetters && !isNeonPreset) {
 				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
 				const end = start + group[wordIndex]!.text.length;
@@ -411,6 +518,15 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 		this.config = CAPCUT_PRESET_CONFIGS[this.presetKey] ?? this.config;
 
+		// Ensure font & style synchronization with preset
+		if (entity.has(TextStyle)) {
+			const curFamily = store(world, TextStyle).fontFamily[entity.id()];
+			if (curFamily !== this.config.style.fontFamily) {
+				entity.set(TextStyle, this.config.style);
+				loadWebFont(world, this.config.style.fontFamily as any);
+			}
+		}
+
 		// If ready now but was uninitialized during earlier seek, re-seek
 		if (this.currentGroupIndex === -1 && this.ready && this.groups.length > 0) {
 			this.seekTo(world, entity, this.lastRelativeTime);
@@ -419,7 +535,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		const chars = store(world, Computed).chars[entity.id()] ?? store(world, Chars).value[entity.id()] ?? '';
 		if (!chars || !chars.trim()) return;
 
-		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
 		const isNoShadowPreset = (!this.config.shadow || this.config.bubbleCloud || isNeonPreset || !!this.config.rainbowLetters);
 
 		// Proactively remove stale Shadow/Stroke child entities or update them to preset's current style
@@ -820,12 +936,28 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.restore();
 		}
 
-		// 6. Final render: Rainbow Candy Letters & Stickers OR Bubble Cloud OR Animated Words OR Standard Text Tokens
+		// 6. Final render: Rainbow Candy Letters & Stickers / Confetti OR Bubble Cloud OR Animated Words OR Standard Text Tokens
 		if (this.config.rainbowLetters) {
-			const palette = this.config.rainbowLetters.palette.map(c => colorToHex(c));
-			const fontSize = this.config.style.fontSize ?? 58;
+			const cfgRainbow = this.config.rainbowLetters;
+			const isTargetActiveOnly = cfgRainbow.target === 'activeWord';
+
+			// Read Inspector custom colors if user adjusted slots
+			const customActiveColor = colors?.[0] !== undefined
+				? (typeof colors[0] === 'string' ? colors[0] : colorToHex(colors[0]))
+				: undefined;
+			const baseLetterColor = colors?.[1] !== undefined
+				? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
+				: (this.config.textColor !== undefined ? colorToHex(this.config.textColor) : '#FFFFFF');
+			const customStrokeColor = colors?.[2] !== undefined
+				? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+				: (this.config.stroke?.color !== undefined ? colorToHex(this.config.stroke.color) : '#000000');
+
+			const rawPalette = cfgRainbow.palette.map(c => colorToHex(c));
+			const palette = customActiveColor ? [customActiveColor, ...rawPalette.filter(c => c !== customActiveColor)] : rawPalette;
+
+			const fontSize = this.config.style.fontSize ?? 56;
 			const anim = this.config.animation;
-			const strokeWidth = this.config.stroke?.width ?? 5.5;
+			const strokeWidth = this.config.stroke?.width ?? 4.5;
 
 			ctx.save();
 			ctx.textAlign = 'start';
@@ -841,6 +973,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				const word = words[wIdx]!;
 				const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
 				const isFuture = (this.currentWordIndex !== -1 && wIdx > this.currentWordIndex);
+				const shouldRainbow = isTargetActiveOnly ? isActive : true;
 
 				applyFont(ctx, world, entity, word.ranges);
 
@@ -857,7 +990,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					}
 					const pop = Math.sin(progress * Math.PI);
 					scale = 1.0 + (maxScale - 1.0) * pop;
-					offsetY = -((scale - 1.0) * fontSize * 0.28);
+					offsetY = -((scale - 1.0) * fontSize * 0.22);
 				}
 
 				ctx.save();
@@ -867,14 +1000,14 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				}
 
 				const wordCenterX = word.x + word.width / 2;
-				const wordCenterY = word.y + (word.height > 0 ? word.height : fontSize) / 2;
+				const wordCenterY = word.y;
 
 				ctx.translate(wordCenterX, wordCenterY + offsetY);
 				ctx.scale(scale, scale);
 				ctx.translate(-wordCenterX, -wordCenterY);
 
-				// 1. Radiant 360-degree neon glow aura pass if glow config is present (NO offset shadow)
-				if (this.config.glow) {
+				// 1. Radiant neon glow aura pass (Preset 12)
+				if (this.config.glow && shouldRainbow) {
 					for (let i = 0; i < word.chars.length; i++) {
 						const char = word.chars[i]!;
 						const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
@@ -892,8 +1025,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					}
 				}
 
-				// 2. Kinetic lightning & spark meme stickers around active word (if enabled)
-				if (this.config.rainbowLetters.stickers && isActive) {
+				// 2. Kinetic lightning & spark meme stickers (Preset 12)
+				if (cfgRainbow.stickers && isActive) {
 					const boltSize = Math.max(fontSize * 0.44, 24);
 					const sparkSize = boltSize * 0.42;
 					let pulse = 1.0;
@@ -910,36 +1043,74 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					drawElectricSpark(ctx, word.x + word.width + boltSize * 0.45, word.y + fontSize * 0.92, sparkSize * pulse);
 				}
 
-				// 3. Draw each character with cyclic rainbow candy gradient and solid outline (NO shadow)
+				// 3. Floating festive candy confetti sprinkles (Preset 15)
+				if (cfgRainbow.confetti && isActive) {
+					const dotR = Math.max(fontSize * 0.08, 4.5);
+					let pulse = 1.0;
+					if (activeWordData) {
+						const elapsed = Math.max(0, this.lastRelativeTime - activeWordData.start);
+						const dur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						const progress = Math.max(0, Math.min(1, elapsed / dur));
+						pulse = 0.92 + 0.25 * Math.sin(progress * Math.PI);
+					}
+
+					const wLeft = word.x;
+					const wRight = word.x + word.width;
+					const cy = word.y;
+
+					drawConfettiSprinkle(ctx, wLeft - dotR * 1.5, cy - fontSize * 0.22, dotR * pulse, '#FACC15');
+					drawConfettiSprinkle(ctx, wLeft + word.width * 0.35, cy - fontSize * 0.52, dotR * 0.85 * pulse, '#FF4B5C');
+					drawConfettiSprinkle(ctx, wRight + dotR * 1.4, cy - fontSize * 0.15, dotR * 1.05 * pulse, '#38BDF8');
+					drawConfettiSprinkle(ctx, wLeft + word.width * 0.18, cy + fontSize * 0.50, dotR * 0.9 * pulse, '#FACC15');
+					drawConfettiSprinkle(ctx, wLeft + word.width * 0.65, cy + fontSize * 0.52, dotR * 0.95 * pulse, '#4ADE80');
+					drawConfettiSprinkle(ctx, wRight + dotR * 0.9, cy + fontSize * 0.38, dotR * 0.8 * pulse, '#FB7185');
+				}
+
+				// 4. Solid black comic offset shadow (Preset 15)
+				if (this.config.shadow) {
+					const shX = this.config.shadow.x ?? 2;
+					const shY = this.config.shadow.y ?? 3;
+					const shColor = colorToHex(this.config.shadow.color);
+					ctx.fillStyle = shColor;
+					for (let i = 0; i < word.chars.length; i++) {
+						const char = word.chars[i]!;
+						const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
+						ctx.fillText(char, word.x + charAdvance + shX, word.y + shY);
+					}
+				}
+
+				// 5. Draw text stroke & candy fill
+				ctx.shadowColor = 'transparent';
+				ctx.shadowBlur = 0;
+				ctx.shadowOffsetX = 0;
+				ctx.shadowOffsetY = 0;
+
 				for (let i = 0; i < word.chars.length; i++) {
 					const char = word.chars[i]!;
 					const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
 					const charX = word.x + charAdvance;
-					const color = palette[charCounter % palette.length]!;
-					charCounter++;
+					const charColor = shouldRainbow ? palette[charCounter % palette.length]! : baseLetterColor;
+					if (shouldRainbow) charCounter++;
 
-					// Ensure no drop shadow is applied
-					ctx.shadowColor = 'transparent';
-					ctx.shadowBlur = 0;
-					ctx.shadowOffsetX = 0;
-					ctx.shadowOffsetY = 0;
-
-					// Crisp black outline
-					ctx.strokeStyle = '#000000';
+					// Crisp outline
+					ctx.strokeStyle = customStrokeColor;
 					ctx.lineWidth = strokeWidth;
 					ctx.lineJoin = 'round';
 					ctx.lineCap = 'round';
 					ctx.miterLimit = 2;
 					ctx.strokeText(char, charX, word.y);
 
-					// Glossy candy fill
-					const charH = word.height > 0 ? word.height : fontSize;
-					const grad = ctx.createLinearGradient(charX, word.y, charX, word.y + charH);
-					grad.addColorStop(0, '#FFFFFF');
-					grad.addColorStop(0.22, color);
-					grad.addColorStop(1, color);
-
-					ctx.fillStyle = grad;
+					// Fill: candy gradient for rainbow, or solid color for base
+					if (shouldRainbow) {
+						const charH = word.height > 0 ? word.height : fontSize;
+						const grad = ctx.createLinearGradient(charX, word.y - charH / 2, charX, word.y + charH / 2);
+						grad.addColorStop(0, '#FFFFFF');
+						grad.addColorStop(0.20, charColor);
+						grad.addColorStop(1, charColor);
+						ctx.fillStyle = grad;
+					} else {
+						ctx.fillStyle = charColor;
+					}
 					ctx.fillText(char, charX, word.y);
 				}
 
@@ -972,11 +1143,11 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 	): void {
 		const anim = this.config.animation;
 		const fontSize = this.config.style.fontSize ?? 54;
-		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
 
 		const activeAccent = (activeColor !== undefined)
 			? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
-			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#FF7A00');
+			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#00F2FF');
 
 		ctx.save();
 		ctx.textAlign = 'start';
@@ -1053,7 +1224,37 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 			// ── LAYER 1: Ambient Glow Aura ──
 			if (this.config.glow) {
-				if (isActive) {
+				if (this.presetKey === 'capcut_16') {
+					// Intense Billowing 360-degree Electric Cyan Neon Bloom Aura
+					const cyanColor = isActive
+						? activeAccent
+						: ((colors?.[2] !== undefined)
+							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+							: '#00F2FF');
+					const baseBlur = isActive ? 26 : 18;
+					const auraWidth = isActive ? 12 : 9;
+
+					ctx.save();
+					ctx.shadowColor = cyanColor;
+					ctx.shadowBlur = baseBlur;
+					ctx.strokeStyle = cyanColor;
+					ctx.lineWidth = auraWidth;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.globalAlpha = isActive ? (wordAlpha * glowAlpha) : (wordAlpha * 0.9);
+					ctx.strokeText(word.chars, word.x, word.y);
+
+					// Second pass: deep diffuse bloom
+					ctx.shadowBlur = baseBlur * 1.8;
+					ctx.lineWidth = auraWidth * 0.7;
+					ctx.strokeText(word.chars, word.x, word.y);
+
+					// Third pass: core radiance
+					ctx.fillStyle = cyanColor;
+					ctx.shadowBlur = baseBlur;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (isActive) {
 					// Active neon glow (Electric Cyan for preset 10, Radiant Orange for preset 09)
 					ctx.save();
 					ctx.shadowColor = activeAccent;
@@ -1107,11 +1308,26 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			// ── LAYER 3: Stroke (Outline) ──
 			const skipStroke = isActive && (this.presetKey === 'capcut_03' || this.presetKey === 'capcut_04' || this.presetKey === 'capcut_07');
 			if (!skipStroke) {
-				if (isActive && isNeonPreset) {
-					// Glowing luminous neon outline around the white core (Cyan for preset 10, Orange for preset 09)
+				if (this.presetKey === 'capcut_16') {
+					// Brilliant crisp Electric Cyan neon outline
+					const strokeColor = isActive
+						? activeAccent
+						: ((colors?.[2] !== undefined)
+							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+							: '#00F2FF');
+					ctx.save();
+					ctx.strokeStyle = strokeColor;
+					ctx.lineWidth = isActive ? 5.8 : 5.0;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.globalAlpha = 1.0;
+					ctx.strokeText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (isActive && isNeonPreset) {
+					// Glowing luminous neon outline around the core (Cyan for preset 10, Orange for preset 09)
 					ctx.save();
 					ctx.strokeStyle = activeAccent;
-					ctx.lineWidth = 4;
+					ctx.lineWidth = this.config.stroke?.width ?? 4.5;
 					ctx.lineJoin = 'round';
 					ctx.lineCap = 'round';
 					ctx.strokeText(word.chars, word.x, word.y);
@@ -1145,7 +1361,14 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 			// ── LAYER 4: Glyph Fill ──
 			ctx.save();
-			if (isNeonPreset) {
+			if (this.presetKey === 'capcut_16') {
+				// Preset 16 has a deep midnight / pitch black core inside the vibrant neon stroke!
+				const darkFill = (colors?.[1] !== undefined)
+					? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
+					: (this.config.textColor !== undefined ? colorToHex(this.config.textColor) : '#040810');
+				ctx.fillStyle = darkFill;
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (isNeonPreset) {
 				// Neon presets have a luminous white-hot core for both active and inactive!
 				ctx.fillStyle = '#FFFFFF';
 				ctx.fillText(word.chars, word.x, word.y);
@@ -1157,6 +1380,20 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				ctx.fillText(word.chars, word.x, word.y);
 			}
 			ctx.restore();
+
+			// ── LAYER 5: Electric Lightning Crackles & Sparks for Preset 16 ──
+			if (this.config.lightningElectric && isActive) {
+				const elapsed = activeWordData ? Math.max(0, this.lastRelativeTime - activeWordData.start) : 0;
+				drawElectricLightningCrackles(
+					ctx,
+					word.x,
+					word.y,
+					word.width,
+					word.height > 0 ? word.height : fontSize,
+					elapsed,
+					activeAccent,
+				);
+			}
 
 			ctx.restore();
 		}

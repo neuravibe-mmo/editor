@@ -67,6 +67,14 @@ export const WebFonts = {
 		weights: ['400', '500', '600', '700'],
 		url: 'https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7B1i0HTQ.ttf',
 	},
+	Rye: {
+		weights: ['400', '700', '900'],
+		url: 'https://fonts.gstatic.com/s/rye/v17/r05XGLJT86YDFg.ttf',
+	},
+	'Alfa Slab One': {
+		weights: ['400'],
+		url: 'https://fonts.gstatic.com/s/alfaslabone/v21/6NUQ8FmMKwSEKjnm5-4v-4Jh6dU.ttf',
+	},
 } as const;
 
 export const FONT_WEIGHTS = {

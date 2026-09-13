@@ -38,6 +38,8 @@ export interface CapCutGlowConfig {
 export interface CapCutRainbowConfig {
 	palette: number[];
 	stickers?: boolean;
+	confetti?: boolean;
+	target?: 'all' | 'activeWord';
 }
 
 export interface CapCutBubbleCloudConfig {
@@ -71,6 +73,13 @@ export interface CapCutAnimationConfig {
 	glowPulse?: boolean;
 }
 
+export interface CapCutLightningElectricConfig {
+	color?: number;
+	glowColor?: string;
+	coreColor?: string;
+	sparks?: boolean;
+}
+
 export interface CapCutPresetConfig {
 	id: string;
 	name: string;
@@ -99,6 +108,7 @@ export interface CapCutPresetConfig {
 	bubbleCloud?: CapCutBubbleCloudConfig;
 	royalStars?: CapCutRoyalStarsConfig;
 	echoTrail?: CapCutEchoTrailConfig;
+	lightningElectric?: CapCutLightningElectricConfig;
 	animation?: CapCutAnimationConfig;
 }
 
@@ -461,25 +471,69 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		},
 	},
 
-	// 15. THE QUICK BROWN FOX - White text with dripping fire brush on active word
+	// 15. Kẹo Cầu Vồng & Confetti - Multi-color candy rainbow letters on active word with festive confetti sprinkles
 	capcut_15: {
 		id: 'capcut_15',
-		name: 'Bụi Bặm Đường Phố',
-		style: BASE_MONTSERRAT_STYLE,
+		name: 'Kẹo Cầu Vồng & Confetti',
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontStyle: FontStyle.ITALIC,
+			fontSize: 56,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xEA580C,
-		stroke: { color: 0x000000, width: 5 },
-		shadow: { color: 0x7C2D12, x: 3, y: 3, blur: 0 },
+		activeTextColor: 0xFF4B5C,
+		stroke: { color: 0x000000, width: 4.5 },
+		shadow: { color: 0x000000, x: 2, y: 3, blur: 0 },
+		rainbowLetters: {
+			palette: [
+				0x38BDF8, // Sky Cyan
+				0xFF4B5C, // Coral Red
+				0xFB7185, // Bubblegum Pink
+				0xFACC15, // Sunny Gold
+				0x4ADE80, // Mint Lime
+				0xA855F7, // Soft Violet
+			],
+			target: 'activeWord',
+			confetti: true,
+		},
+		animation: {
+			scalePop: 1.22,
+			dimUpcoming: false,
+		},
 	},
 
-	// 16. BROWN - Electric Cyan neon on dark letters
+	// 16. BROWN - Electric Cyan neon on dark letters with lightning crackles
 	capcut_16: {
 		id: 'capcut_16',
 		name: 'Tia Sét Cyan',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0x22D3EE,
-		stroke: { color: 0x083344, width: 6 },
-		glow: { color: '#06B6D4', blur: 22 },
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Alfa Slab One',
+			fontWeight: '400',
+			fontStyle: FontStyle.NORMAL,
+			fontSize: 60,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0x040810,
+		activeTextColor: 0x00F2FF,
+		stroke: { color: 0x00F2FF, width: 5.5 },
+		glow: { color: '#00F2FF', blur: 30 },
+		lightningElectric: {
+			color: 0x00F2FF,
+			glowColor: '#00F2FF',
+			coreColor: '#E0FFFF',
+			sparks: true,
+		},
+		animation: {
+			scalePop: 1.25,
+			dimUpcoming: false,
+			glowPulse: true,
+		},
 	},
 
 	// 17. THE QUICK - Mint green & Pastel Coral Pink
