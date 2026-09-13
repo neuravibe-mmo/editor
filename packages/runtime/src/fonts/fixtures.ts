@@ -24,7 +24,7 @@ export const WebFonts = {
 		url: 'https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDBImRTM.ttf',
 	},
 	'Baloo 2': {
-		weights: ['500', '600', '700', '800'],
+		weights: ['800'],
 		url: 'https://fonts.gstatic.com/s/baloo2/v23/wXK0E3kTposypRydzVT08TS3JnAmtdiayqpv.ttf',
 	},
 	Figtree: {

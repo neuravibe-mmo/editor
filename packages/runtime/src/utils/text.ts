@@ -142,7 +142,21 @@ export function applyFont(ctx: Ctx, world: World, entity: Entity, ranges: Entity
 	const mappedStyle = FontStyle[style]!.toLowerCase();
 	const mappedBaseline = TextBaseline[baseline]!.toLowerCase() as CanvasTextBaseline;
 
-	ctx.font = `${mappedStyle} ${weight.toLowerCase()} ${size}px ${family}`.trim();
+	// Quote family names containing spaces, numbers, or punctuation (e.g. "Baloo 2", "Playfair Display")
+	// so the Canvas 2D CSS font parser accepts them without falling back to 10px sans-serif.
+	const safeFamily = family.includes(',')
+		? family
+				.split(',')
+				.map((f) => {
+					const clean = f.trim().replace(/^['"]|['"]$/g, '');
+					return clean === 'sans-serif' || clean === 'serif' || clean === 'monospace' ? clean : `"${clean}"`;
+				})
+				.join(', ')
+		: (family === 'sans-serif' || family === 'serif' || family === 'monospace'
+				? family
+				: `"${family.replace(/^['"]|['"]$/g, '')}"`);
+
+	ctx.font = `${mappedStyle} ${weight.toLowerCase()} ${size}px ${safeFamily}, sans-serif`.trim();
 	ctx.textBaseline = mappedBaseline;
 	ctx.letterSpacing = `${spacing}px`;
 }

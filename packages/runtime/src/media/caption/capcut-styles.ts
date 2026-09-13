@@ -80,6 +80,13 @@ export interface CapCutLightningElectricConfig {
 	sparks?: boolean;
 }
 
+export interface CapCutCandyDreamConfig {
+	topColor?: string;
+	bottomColor?: string;
+	base3DColor?: string;
+	stickers?: boolean;
+}
+
 export interface CapCutPresetConfig {
 	id: string;
 	name: string;
@@ -109,6 +116,7 @@ export interface CapCutPresetConfig {
 	royalStars?: CapCutRoyalStarsConfig;
 	echoTrail?: CapCutEchoTrailConfig;
 	lightningElectric?: CapCutLightningElectricConfig;
+	candyDream?: CapCutCandyDreamConfig;
 	animation?: CapCutAnimationConfig;
 }
 
@@ -536,15 +544,39 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		},
 	},
 
-	// 17. THE QUICK - Mint green & Pastel Coral Pink
+	// 17. THE QUICK - Pastel Rainbow Candy Letters with crisp dark outline & NO shadow
 	capcut_17: {
 		id: 'capcut_17',
-		name: 'Bạc Hà San Hô',
-		style: BASE_MONTSERRAT_STYLE,
+		name: 'Kẹo Pastel Đa Sắc',
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontStyle: FontStyle.ITALIC,
+			fontWeight: '900',
+			fontSize: 64,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0x34D399,
 		activeTextColor: 0xFB7185,
-		stroke: { color: 0x1F2937, width: 5 },
-		shadow: { color: 0x000000, x: 4, y: 4, blur: 0 },
+		stroke: { color: 0x18181B, width: 4.5 },
+		rainbowLetters: {
+			palette: [
+				0x34D399, // Mint Turquoise (Letter T, U)
+				0xC084FC, // Soft Lavender (Letter H, I)
+				0x38BDF8, // Sky Blue (Letter E, C)
+				0xFDE047, // Butter Yellow (Letter Q)
+				0x4ADE80, // Fresh Lime Green
+				0xD8B4FE, // Pastel Lilac Purple
+				0x7DD3FC, // Baby Sky Blue
+				0xFB7185, // Sweet Candy Pink (Letter K)
+			],
+			stickers: false,
+		},
+		animation: {
+			scalePop: 1.20,
+			dimUpcoming: 0.65,
+		},
 	},
 
 	// 18. THE QUICK BROWN - Diagonal 3D Pink glitter block

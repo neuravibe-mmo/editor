@@ -339,6 +339,8 @@ function drawConfettiSprinkle(
 
 
 
+
+
 export class CapCutCaptionDecoder implements CaptionDecoder {
 	public readonly type: CaptionType;
 	public groups: ReturnType<typeof groupBy> = [];
@@ -476,8 +478,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			this.fill = null;
 			this.range = null;
 
-			const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
-			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !this.config.rainbowLetters && !isNeonPreset) {
+			const isCustomPaintPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16' || this.presetKey === 'capcut_17' || !!this.config.rainbowLetters);
+			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !isCustomPaintPreset) {
 				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
 				const end = start + group[wordIndex]!.text.length;
 				const range = createEntity(world);
@@ -518,13 +520,21 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 		this.config = CAPCUT_PRESET_CONFIGS[this.presetKey] ?? this.config;
 
-		// Ensure font & style synchronization with preset
-		if (entity.has(TextStyle)) {
-			const curFamily = store(world, TextStyle).fontFamily[entity.id()];
-			if (curFamily !== this.config.style.fontFamily) {
-				entity.set(TextStyle, this.config.style);
-				loadWebFont(world, this.config.style.fontFamily as any);
-			}
+		// Ensure font & style synchronization with preset (including fontSize)
+		if (!entity.has(TextStyle)) {
+			entity.add(TextStyle);
+		}
+		const curFamily = store(world, TextStyle).fontFamily[entity.id()];
+		const curSize = store(world, TextStyle).fontSize[entity.id()];
+		const targetSize = this.config.style.fontSize ?? 58;
+		if (curFamily !== this.config.style.fontFamily || curSize !== targetSize) {
+			entity.set(TextStyle, {
+				...this.config.style,
+				fontSize: targetSize,
+			});
+			store(world, TextStyle).fontSize[entity.id()] = targetSize;
+			store(world, TextStyle).fontFamily[entity.id()] = this.config.style.fontFamily;
+			loadWebFont(world, this.config.style.fontFamily as any);
 		}
 
 		// If ready now but was uninitialized during earlier seek, re-seek
@@ -536,7 +546,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		if (!chars || !chars.trim()) return;
 
 		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
-		const isNoShadowPreset = (!this.config.shadow || this.config.bubbleCloud || isNeonPreset || !!this.config.rainbowLetters);
+		const isCustomDecorationPreset = (isNeonPreset || this.presetKey === 'capcut_17' || !!this.config.bubbleCloud || !!this.config.rainbowLetters);
+		const isNoShadowPreset = (!this.config.shadow || isCustomDecorationPreset);
 
 		// Proactively remove stale Shadow/Stroke child entities or update them to preset's current style
 		if (isNoShadowPreset) {
@@ -551,7 +562,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						deleteEntity(world, child);
 					}
 				}
-				if ((this.config.bubbleCloud || isNeonPreset || this.config.rainbowLetters) && child.has(Stroke)) {
+				if (isCustomDecorationPreset && child.has(Stroke)) {
 					child.remove(Stroke);
 					child.add(Hidden);
 					if (!child.has(Source)) {
@@ -1103,9 +1114,9 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					// Fill: candy gradient for rainbow, or solid color for base
 					if (shouldRainbow) {
 						const charH = word.height > 0 ? word.height : fontSize;
-						const grad = ctx.createLinearGradient(charX, word.y - charH / 2, charX, word.y + charH / 2);
+						const grad = ctx.createLinearGradient(charX, word.y, charX, word.y + charH);
 						grad.addColorStop(0, '#FFFFFF');
-						grad.addColorStop(0.20, charColor);
+						grad.addColorStop(0.28, charColor);
 						grad.addColorStop(1, charColor);
 						ctx.fillStyle = grad;
 					} else {
@@ -1136,13 +1147,13 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
 		world: World,
 		entity: Entity,
-		words: Array<{ chars: string; x: number; y: number; width: number; height: number; ranges: Entity[] }>,
+		words: Array<{ chars: string; x: number; y: number; width: number; height: number; top?: number; bottom?: number; ranges: Entity[] }>,
 		activeColor: string | number | undefined,
 		baseColor: string | number | undefined,
 		colors?: Array<string | number>,
 	): void {
 		const anim = this.config.animation;
-		const fontSize = this.config.style.fontSize ?? 54;
+		const fontSize = this.config.style.fontSize ?? 84;
 		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
 
 		const activeAccent = (activeColor !== undefined)
@@ -1157,9 +1168,13 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			? this.groups[this.currentGroupIndex]?.[this.currentWordIndex]
 			: null;
 
+		const activeWIdx = (this.currentWordIndex >= 0 && this.currentWordIndex < words.length)
+			? this.currentWordIndex
+			: 0;
+
 		for (let wIdx = 0; wIdx < words.length; wIdx++) {
 			const word = words[wIdx]!;
-			const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
+			const isActive = (wIdx === activeWIdx);
 			const isFuture = (this.currentWordIndex !== -1 && wIdx > this.currentWordIndex);
 
 			// Calculate scale & glow pulse
@@ -1292,7 +1307,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				}
 			}
 
-			// ── LAYER 2: Shadow (if preset config defines a drop shadow, skipped for neon presets) ──
+			// ── LAYER 2: Shadow & 3D Extrusion (skipped for neon presets) ──
 			if (this.config.shadow && !this.config.bubbleCloud && !isNeonPreset) {
 				ctx.save();
 				ctx.shadowColor = colorToHex(this.config.shadow.color);
@@ -1381,7 +1396,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			}
 			ctx.restore();
 
-			// ── LAYER 5: Electric Lightning Crackles & Sparks for Preset 16 ──
+			// ── LAYER 5b: Electric Lightning Crackles & Sparks for Preset 16 ──
 			if (this.config.lightningElectric && isActive) {
 				const elapsed = activeWordData ? Math.max(0, this.lastRelativeTime - activeWordData.start) : 0;
 				drawElectricLightningCrackles(
