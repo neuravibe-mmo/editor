@@ -45,6 +45,7 @@ export interface CapCutBubbleCloudConfig {
 	cloudBorderColor?: number;
 	innerBorderColor?: number;
 	bubbles?: boolean;
+	sparkles?: boolean;
 }
 
 export interface CapCutRoyalStarsConfig {
@@ -379,52 +380,85 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		name: 'Kẹo Cầu Vồng & Sấm Sét',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
 			fontStyle: FontStyle.ITALIC,
 			fontWeight: '900',
-			fontSize: 62,
+			fontSize: 54,
 			letterSpacing: 2,
 			textCase: TextCase.UPPER,
 		},
-		textColor: 0xFFFFFF,
+		textColor: 0x00D2FF,
 		activeTextColor: 0xFFD000,
-		stroke: { color: 0x000000, width: 5 },
+		stroke: { color: 0x000000, width: 4.5 },
+		glow: { color: '#00D2FF', blur: 20 },
 		rainbowLetters: {
-			palette: [0xFFB800, 0x22C55E, 0x06B6D4, 0xEC4899, 0xF97316],
-			stickers: false,
+			palette: [
+				0x2563EB, // Electric Blue
+				0x00D2FF, // Vibrant Cyan
+				0x10D897, // Mint Turquoise
+				0x68CC26, // Lime Green
+				0xFFD000, // Golden Sunshine
+				0xFF3366, // Hot Coral Pink
+				0x9933FF, // Neon Violet
+			],
+			stickers: true,
 		},
 		animation: {
-			scalePop: 1.20,
+			scalePop: 1.25,
 			dimUpcoming: 0.5,
 		},
 	},
 
-	// 13. Fox Jumps Over - Script/Cursive font with Pink/Cyan neon
+	// 13. The Lazy Dog - Script/Cursive font with Pink/Cyan neon
 	capcut_13: {
 		id: 'capcut_13',
 		name: 'Chữ Ký Neon',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontStyle: FontStyle.ITALIC,
+			fontFamily: 'Dancing Script',
+			fontWeight: '700',
+			fontStyle: FontStyle.NORMAL,
 			textCase: TextCase.ORIGINAL,
-			fontSize: 54,
+			fontSize: 60,
+			letterSpacing: 1,
 		},
-		textColor: 0xF43F5E,
-		activeTextColor: 0x06B6D4,
-		glow: { color: '#06B6D4', blur: 18 },
+		textColor: 0xFF2A85,
+		activeTextColor: 0x00F0FF,
+		stroke: { color: 0xFF2A85, width: 3 },
+		glow: { color: '#00F0FF', blur: 24 },
+		animation: {
+			scalePop: 1.25,
+			dimUpcoming: false,
+			glowPulse: true,
+		},
 	},
 
-	// 14. THE - Pink bubble gum with white border and yellow accents
+	// 14. Kẹo Ngọt Dễ Thương - Vibrant pastel sky-blue cloud badge with puffy white border, pure white text, and floating pink sakura blossoms
 	capcut_14: {
 		id: 'capcut_14',
 		name: 'Kẹo Ngọt Dễ Thương',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontSize: 60,
+			fontFamily: 'Nunito',
+			fontWeight: '900',
+			fontSize: 54,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
 		},
-		textColor: 0xF472B6,
-		stroke: { color: 0xFFFFFF, width: 8 },
-		outerStroke: { color: 0x000000, width: 14 },
-		shadow: { color: 0xFBBF24, x: 3, y: 4, blur: 0 },
+		textColor: 0xFFFFFF,
+		activeTextColor: 0xFFFFFF,
+		stroke: { color: 0xFFFFFF, width: 4 },
+		bubbleCloud: {
+			cloudColor: 0x4695D8,
+			cloudBorderColor: 0xFFFFFF,
+			innerBorderColor: 0x3B82F6,
+			bubbles: true,
+			sparkles: true,
+		},
+		animation: {
+			scalePop: 1.15,
+			dimUpcoming: false,
+		},
 	},
 
 	// 15. THE QUICK BROWN FOX - White text with dripping fire brush on active word

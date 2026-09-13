@@ -21,7 +21,11 @@ export const WebFonts = {
 	},
 	Nunito: {
 		weights: ['200', '300', '400', '500', '600', '700', '800', '900'],
-		url: 'https://fonts.gstatic.com/s/nunito/v26/XRXV3I6Li01BKofINeaBTMnFcQ.woff2',
+		url: 'https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDBImRTM.ttf',
+	},
+	'Baloo 2': {
+		weights: ['500', '600', '700', '800'],
+		url: 'https://fonts.gstatic.com/s/baloo2/v23/wXK0E3kTposypRydzVT08TS3JnAmtdiayqpv.ttf',
 	},
 	Figtree: {
 		weights: ['300', '400', '500', '600', '700', '800', '900'],
@@ -58,6 +62,10 @@ export const WebFonts = {
 	'Playfair Display': {
 		weights: ['400', '600', '700', '800', '900'],
 		url: 'https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiukDQ.ttf',
+	},
+	'Dancing Script': {
+		weights: ['400', '500', '600', '700'],
+		url: 'https://fonts.gstatic.com/s/dancingscript/v29/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7B1i0HTQ.ttf',
 	},
 } as const;
 

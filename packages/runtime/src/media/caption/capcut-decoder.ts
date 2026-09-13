@@ -160,6 +160,12 @@ function drawLightningBolt(
 	ctx.translate(x, y);
 	if (rotation !== 0) ctx.rotate(rotation);
 
+	// Electric golden aura glow
+	ctx.shadowColor = 'rgba(255, 230, 0, 0.85)';
+	ctx.shadowBlur = 10;
+	ctx.shadowOffsetX = 0;
+	ctx.shadowOffsetY = 0;
+
 	ctx.beginPath();
 	ctx.moveTo(size * 0.15, -size * 0.6);
 	ctx.lineTo(-size * 0.45, -size * 0.05);
@@ -169,13 +175,58 @@ function drawLightningBolt(
 	ctx.lineTo(size * 0.05, size * 0.05);
 	ctx.closePath();
 
-	ctx.fillStyle = '#FFE500';
+	// Electric yellow gradient fill
+	const grad = ctx.createLinearGradient(0, -size * 0.6, 0, size * 0.6);
+	grad.addColorStop(0, '#FFFDE7');
+	grad.addColorStop(0.3, '#FFE600');
+	grad.addColorStop(1, '#FFA000');
+	ctx.fillStyle = grad;
+
 	ctx.strokeStyle = '#000000';
-	ctx.lineWidth = 2.5;
+	ctx.lineWidth = 2.4;
 	ctx.lineJoin = 'round';
 	ctx.stroke();
 	ctx.fill();
 
+	// White spark core highlight
+	ctx.beginPath();
+	ctx.moveTo(size * 0.05, -size * 0.4);
+	ctx.lineTo(-size * 0.18, 0);
+	ctx.lineTo(size * 0.12, size * 0.2);
+	ctx.strokeStyle = '#FFFFFF';
+	ctx.lineWidth = 1.4;
+	ctx.stroke();
+
+	ctx.restore();
+}
+
+function drawElectricSpark(
+	ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+	x: number,
+	y: number,
+	size: number,
+): void {
+	ctx.save();
+	ctx.translate(x, y);
+	ctx.shadowColor = 'rgba(255, 240, 100, 0.9)';
+	ctx.shadowBlur = 8;
+	ctx.shadowOffsetX = 0;
+	ctx.shadowOffsetY = 0;
+
+	// 4-point diamond star spark
+	ctx.beginPath();
+	ctx.moveTo(0, -size);
+	ctx.quadraticCurveTo(0, 0, size, 0);
+	ctx.quadraticCurveTo(0, 0, 0, size);
+	ctx.quadraticCurveTo(0, 0, -size, 0);
+	ctx.quadraticCurveTo(0, 0, 0, -size);
+	ctx.closePath();
+
+	ctx.fillStyle = '#FFF59D';
+	ctx.strokeStyle = '#000000';
+	ctx.lineWidth = 1.6;
+	ctx.stroke();
+	ctx.fill();
 	ctx.restore();
 }
 
@@ -242,8 +293,10 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 		entity.set(Paint, { value: PaintType.SOLID });
 
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+
 		// Inner/Main Stroke
-		if (this.config.stroke && !this.config.bubbleCloud) {
+		if (this.config.stroke && !this.config.bubbleCloud && !isNeonPreset && !this.config.rainbowLetters) {
 			const stroke = createEntity(world);
 			stroke.add(Stroke);
 			stroke.add(Paint);
@@ -260,7 +313,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 
 		// Soft or Hard Shadow
-		if (this.config.shadow && !this.config.bubbleCloud && !this.config.rainbowLetters) {
+		if (this.config.shadow && !this.config.bubbleCloud && !this.config.rainbowLetters && !isNeonPreset) {
 			const shadow = createEntity(world);
 			shadow.add(Shadow);
 			shadow.add(Color);
@@ -316,7 +369,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			this.fill = null;
 			this.range = null;
 
-			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !this.config.rainbowLetters) {
+			const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
+			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !this.config.rainbowLetters && !isNeonPreset) {
 				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
 				const end = start + group[wordIndex]!.text.length;
 				const range = createEntity(world);
@@ -365,7 +419,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		const chars = store(world, Computed).chars[entity.id()] ?? store(world, Chars).value[entity.id()] ?? '';
 		if (!chars || !chars.trim()) return;
 
-		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10');
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
 		const isNoShadowPreset = (!this.config.shadow || this.config.bubbleCloud || isNeonPreset || !!this.config.rainbowLetters);
 
 		// Proactively remove stale Shadow/Stroke child entities or update them to preset's current style
@@ -374,11 +428,19 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				entity.remove(Shadow);
 			}
 			for (const child of world.query(ChildOf(entity))) {
-				if (!child.has(Source) && child.has(Shadow)) {
-					deleteEntity(world, child);
+				if (child.has(Shadow)) {
+					child.remove(Shadow);
+					child.add(Hidden);
+					if (!child.has(Source)) {
+						deleteEntity(world, child);
+					}
 				}
-				if ((this.config.bubbleCloud || isNeonPreset || this.config.rainbowLetters) && !child.has(Source) && child.has(Stroke)) {
-					deleteEntity(world, child);
+				if ((this.config.bubbleCloud || isNeonPreset || this.config.rainbowLetters) && child.has(Stroke)) {
+					child.remove(Stroke);
+					child.add(Hidden);
+					if (!child.has(Source)) {
+						deleteEntity(world, child);
+					}
 				}
 			}
 		} else if (this.config.shadow) {
@@ -811,16 +873,44 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				ctx.scale(scale, scale);
 				ctx.translate(-wordCenterX, -wordCenterY);
 
-				// Kinetic lightning stickers around active word (if enabled)
-				if (this.config.rainbowLetters.stickers && isActive) {
-					const boltSize = Math.max(fontSize * 0.38, 22);
-					drawLightningBolt(ctx, word.x - boltSize * 0.7, word.y - boltSize * 0.2, boltSize, -0.25);
-					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.7, word.y - boltSize * 0.2, boltSize, 0.25);
-					drawLightningBolt(ctx, word.x - boltSize * 0.5, word.y + fontSize * 0.85, boltSize * 0.85, -0.35);
-					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.5, word.y + fontSize * 0.85, boltSize * 0.85, 0.35);
+				// 1. Radiant 360-degree neon glow aura pass if glow config is present (NO offset shadow)
+				if (this.config.glow) {
+					for (let i = 0; i < word.chars.length; i++) {
+						const char = word.chars[i]!;
+						const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
+						const charX = word.x + charAdvance;
+						const color = palette[(charCounter + i) % palette.length]!;
+
+						ctx.save();
+						ctx.shadowColor = color;
+						ctx.shadowBlur = Math.min(this.config.glow.blur ?? 20, 24);
+						ctx.shadowOffsetX = 0;
+						ctx.shadowOffsetY = 0;
+						ctx.fillStyle = color;
+						ctx.fillText(char, charX, word.y);
+						ctx.restore();
+					}
 				}
 
-				// Draw each character with cyclic rainbow candy gradient and solid outline (NO shadow)
+				// 2. Kinetic lightning & spark meme stickers around active word (if enabled)
+				if (this.config.rainbowLetters.stickers && isActive) {
+					const boltSize = Math.max(fontSize * 0.44, 24);
+					const sparkSize = boltSize * 0.42;
+					let pulse = 1.0;
+					if (activeWordData) {
+						const elapsed = this.lastRelativeTime - activeWordData.start;
+						const dur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						const progress = Math.max(0, Math.min(1, elapsed / dur));
+						pulse = 0.88 + 0.28 * Math.sin(progress * Math.PI);
+					}
+
+					drawLightningBolt(ctx, word.x + word.width + boltSize * 0.6, word.y - boltSize * 0.25, boltSize * pulse, 0.28);
+					drawLightningBolt(ctx, word.x - boltSize * 0.6, word.y + fontSize * 0.82, boltSize * 0.9 * pulse, -0.32);
+					drawElectricSpark(ctx, word.x - boltSize * 0.35, word.y - boltSize * 0.15, sparkSize * pulse);
+					drawElectricSpark(ctx, word.x + word.width + boltSize * 0.45, word.y + fontSize * 0.92, sparkSize * pulse);
+				}
+
+				// 3. Draw each character with cyclic rainbow candy gradient and solid outline (NO shadow)
 				for (let i = 0; i < word.chars.length; i++) {
 					const char = word.chars[i]!;
 					const charAdvance = ctx.measureText(word.chars.slice(0, i)).width;
@@ -882,7 +972,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 	): void {
 		const anim = this.config.animation;
 		const fontSize = this.config.style.fontSize ?? 54;
-		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10');
+		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13');
 
 		const activeAccent = (activeColor !== undefined)
 			? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
@@ -975,8 +1065,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					ctx.shadowBlur = glowBlur * 1.6;
 					ctx.fillText(word.chars, word.x, word.y);
 					ctx.restore();
-				} else if (this.presetKey === 'capcut_10') {
-					// Radiant Hot Pink Neon Glow for inactive words in Preset 10!
+				} else if (this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13') {
+					// Radiant Hot Pink Neon Glow for inactive words in Preset 10 & Preset 13!
 					const pinkColor = (colors?.[1] !== undefined)
 						? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
 						: '#FF2A85';
@@ -1026,8 +1116,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					ctx.lineCap = 'round';
 					ctx.strokeText(word.chars, word.x, word.y);
 					ctx.restore();
-				} else if (!isActive && this.presetKey === 'capcut_10') {
-					// Radiant Hot Pink Neon Outline for inactive words in Preset 10 (NO black stroke!)
+				} else if (!isActive && (this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13')) {
+					// Radiant Hot Pink Neon Outline for inactive words in Preset 10 & 13 (NO black stroke!)
 					const pinkColor = (colors?.[1] !== undefined)
 						? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
 						: '#FF2A85';
@@ -1080,106 +1170,314 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		entity: Entity,
 		words: Array<{ chars: string; x: number; y: number; width: number; height: number; ranges: Entity[] }>,
 	): void {
+		if (words.length === 0) return;
+
 		const cfg = this.config.bubbleCloud!;
-		const fontSize = this.config.style.fontSize ?? 58;
+		const fontSize = this.config.style.fontSize ?? 54;
+		const isCuteBadge = this.presetKey === 'capcut_14';
 
 		// Read Inspector color overrides if user adjusted slots
 		const colors = entity.get(Caption)?.colors;
 		const activeHighlight = colors?.[0] !== undefined
 			? (typeof colors[0] === 'string' ? colors[0] : colorToHex(colors[0]))
-			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#38BDF8');
+			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#FFFFFF');
 		const baseLetterColor = colors?.[1] !== undefined
 			? (typeof colors[1] === 'string' ? colors[1] : colorToHex(colors[1]))
-			: (this.config.textColor !== undefined ? colorToHex(this.config.textColor) : '#BAE6FD');
+			: (this.config.textColor !== undefined ? colorToHex(this.config.textColor) : (isCuteBadge ? '#FFFFFF' : '#BAE6FD'));
 		const customBorderColor = colors?.[2] !== undefined
 			? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
 			: undefined;
 
-		const cloudBorderColor = customBorderColor ?? (cfg.cloudBorderColor !== undefined ? colorToHex(cfg.cloudBorderColor) : '#0284C7');
-		const cloudBodyColor = cfg.cloudColor !== undefined ? colorToHex(cfg.cloudColor) : '#BAE6FD';
-		const innerBorderColor = cfg.innerBorderColor !== undefined ? colorToHex(cfg.innerBorderColor) : '#0369A1';
+		const cloudBorderColor = customBorderColor ?? (cfg.cloudBorderColor !== undefined ? colorToHex(cfg.cloudBorderColor) : (isCuteBadge ? '#FFFFFF' : '#0284C7'));
+		const cloudBodyColor = cfg.cloudColor !== undefined ? colorToHex(cfg.cloudColor) : (isCuteBadge ? '#4695D8' : '#BAE6FD');
+		const innerBorderColor = cfg.innerBorderColor !== undefined ? colorToHex(cfg.innerBorderColor) : (isCuteBadge ? '#3B82F6' : '#0369A1');
 
 		ctx.save();
 		ctx.textAlign = 'start';
 		ctx.textBaseline = 'top';
 
-		// ── LAYER 1: Outer Cloud Silhouette (Deep Sky Blue / Cyan) ──
-		ctx.save();
-		ctx.strokeStyle = cloudBorderColor;
-		ctx.lineWidth = Math.max(fontSize * 0.36, 22);
-		ctx.lineJoin = 'round';
-		ctx.lineCap = 'round';
-		for (const word of words) {
-			applyFont(ctx, world, entity, word.ranges);
-			ctx.strokeText(word.chars, word.x, word.y);
+		// Ensure NO drop shadow interference
+		ctx.shadowColor = 'transparent';
+		ctx.shadowBlur = 0;
+		ctx.shadowOffsetX = 0;
+		ctx.shadowOffsetY = 0;
+
+		const activeWordData = (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0)
+			? this.groups[this.currentGroupIndex]?.[this.currentWordIndex]
+			: null;
+
+		if (isCuteBadge) {
+			// ── PRESET 14: Authentic Pastel Sky-Blue Cloud Badge ──
+			const glyphHalfHeight = fontSize * 0.40;
+			const wordTops = words.map(w => {
+				const t = (w as any).top;
+				return (typeof t === 'number' && !isNaN(t) && t !== 0) ? t : (w.y - glyphHalfHeight);
+			});
+			const wordBottoms = words.map(w => {
+				const b = (w as any).bottom;
+				return (typeof b === 'number' && !isNaN(b) && b !== 0) ? b : (w.y + glyphHalfHeight);
+			});
+
+			const minX = Math.min(...words.map(w => w.x));
+			const maxX = Math.max(...words.map(w => w.x + w.width));
+			const textTop = Math.min(...wordTops);
+			const textBottom = Math.max(...wordBottoms);
+			const textHeight = Math.max(textBottom - textTop, fontSize * 0.7);
+
+			// Balanced padding: perfectly equal top & bottom spacing so 1 line is centered with zero bottom void
+			const padX = Math.max(fontSize * 0.46, 26);
+			const padY = Math.max(fontSize * 0.42, 22);
+
+			const boxX = minX - padX;
+			const boxY = textTop - padY;
+			const boxW = (maxX - minX) + padX * 2;
+			const boxH = textHeight + padY * 2;
+			const radius = Math.min(boxH * 0.38, 22);
+			const borderWidth = 5;
+			const puffRadius = Math.max(boxH * 0.25, 13);
+
+			// Build list of cloud puff circles along all 4 edges for a true organic cloud silhouette
+			const puffs: Array<{ x: number; y: number; r: number }> = [];
+			const countX = Math.max(3, Math.round(boxW / (puffRadius * 1.5)));
+			for (let i = 0; i <= countX; i++) {
+				const px = boxX + (i / countX) * boxW;
+				puffs.push({ x: px, y: boxY + 2, r: puffRadius * (0.85 + 0.15 * Math.sin(i * 1.8)) });
+				puffs.push({ x: px, y: boxY + boxH - 2, r: puffRadius * (0.85 + 0.15 * Math.cos(i * 1.8)) });
+			}
+			const countY = Math.max(1, Math.round(boxH / (puffRadius * 1.6)));
+			for (let i = 0; i <= countY; i++) {
+				const py = boxY + (i / countY) * boxH;
+				puffs.push({ x: boxX + 2, y: py, r: puffRadius * 0.9 });
+				puffs.push({ x: boxX + boxW - 2, y: py, r: puffRadius * 0.9 });
+			}
+
+			// 1. Outer White Cloud Silhouette with Soft Diffused Shadow
+			ctx.save();
+			ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+			ctx.shadowBlur = 10;
+			ctx.shadowOffsetX = 0;
+			ctx.shadowOffsetY = 4;
+
+			ctx.fillStyle = cloudBorderColor;
+			ctx.beginPath();
+			ctx.roundRect(boxX - borderWidth, boxY - borderWidth, boxW + borderWidth * 2, boxH + borderWidth * 2, radius + borderWidth);
+			for (const p of puffs) {
+				ctx.moveTo(p.x + p.r + borderWidth, p.y);
+				ctx.arc(p.x, p.y, p.r + borderWidth, 0, Math.PI * 2);
+			}
+			ctx.fill();
+			ctx.restore();
+
+			// 2. Inner Sky-Blue Cloud Body
+			ctx.save();
+			const cloudGrad = ctx.createLinearGradient(boxX, boxY, boxX, boxY + boxH);
+			cloudGrad.addColorStop(0, '#5BA4ED');
+			cloudGrad.addColorStop(0.45, cloudBodyColor);
+			cloudGrad.addColorStop(1, '#3880C4');
+			ctx.fillStyle = cloudGrad;
+			ctx.beginPath();
+			ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+			for (const p of puffs) {
+				ctx.moveTo(p.x + p.r, p.y);
+				ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+			}
+			ctx.fill();
+			ctx.restore();
+
+			// 3. Crisp Pure White Text Fill with thick rounded joins
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
+				const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
+				const wordColor = isActive ? activeHighlight : baseLetterColor;
+
+				ctx.save();
+				let scale = 1.0;
+				if (isActive && this.config.animation?.scalePop) {
+					const maxPop = this.config.animation.scalePop;
+					let progress = 0.5;
+					if (activeWordData) {
+						const elapsed = Math.max(0, this.lastRelativeTime - activeWordData.start);
+						const dur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						progress = Math.max(0, Math.min(1, elapsed / dur));
+					}
+					scale = 1.0 + (maxPop - 1.0) * Math.sin(progress * Math.PI);
+				}
+
+				if (scale !== 1.0) {
+					const cx = word.x + word.width / 2;
+					const cy = word.y;
+					ctx.translate(cx, cy);
+					ctx.scale(scale, scale);
+					ctx.translate(-cx, -cy);
+				}
+
+				applyFont(ctx, world, entity, word.ranges);
+
+				ctx.lineJoin = 'round';
+				ctx.lineCap = 'round';
+				ctx.strokeStyle = wordColor;
+				ctx.lineWidth = 2.5;
+				ctx.strokeText(word.chars, word.x, word.y);
+				ctx.fillStyle = wordColor;
+				ctx.fillText(word.chars, word.x, word.y);
+				ctx.restore();
+			}
+
+			// 4. Floating Pink Sakura Blossom Petals & Sparkle Stars
+			if (cfg.bubbles !== false) {
+				this.drawSakuraFlower(ctx, boxX - 4, boxY + 10, Math.max(fontSize * 0.38, 20));
+				this.drawSakuraFlower(ctx, boxX + boxW + 6, boxY + boxH - 10, Math.max(fontSize * 0.42, 22));
+
+				this.drawSparkleStar(ctx, boxX + boxW - 12, boxY - 8, Math.max(fontSize * 0.18, 9));
+				this.drawSparkleStar(ctx, boxX + 20, boxY + boxH + 10, Math.max(fontSize * 0.15, 8));
+			}
+		} else {
+			// ── PRESET 05: Classic Bong Bóng Mây Xanh ──
+			// Layer 1: Outer Cloud Silhouette
+			ctx.save();
+			ctx.strokeStyle = cloudBorderColor;
+			ctx.lineWidth = Math.max(fontSize * 0.36, 24);
+			ctx.lineJoin = 'round';
+			ctx.lineCap = 'round';
+			for (const word of words) {
+				applyFont(ctx, world, entity, word.ranges);
+				ctx.strokeText(word.chars, word.x, word.y);
+			}
+			ctx.restore();
+
+			// Layer 2: Cloud Body Gradient
+			ctx.save();
+			ctx.lineWidth = Math.max(fontSize * 0.26, 18);
+			ctx.lineJoin = 'round';
+			ctx.lineCap = 'round';
+			for (const word of words) {
+				applyFont(ctx, world, entity, word.ranges);
+				const cloudGrad = ctx.createLinearGradient(word.x, word.y - fontSize * 0.1, word.x, word.y + fontSize * 1.1);
+				cloudGrad.addColorStop(0, '#FFFFFF');
+				cloudGrad.addColorStop(0.35, '#E0F2FE');
+				cloudGrad.addColorStop(1, cloudBodyColor);
+				ctx.strokeStyle = cloudGrad;
+				ctx.strokeText(word.chars, word.x, word.y);
+			}
+			ctx.restore();
+
+			// Layer 3: Inner Contour Outline
+			ctx.save();
+			ctx.strokeStyle = innerBorderColor;
+			ctx.lineWidth = Math.max(fontSize * 0.11, 6.5);
+			ctx.lineJoin = 'round';
+			ctx.lineCap = 'round';
+			for (const word of words) {
+				applyFont(ctx, world, entity, word.ranges);
+				ctx.strokeText(word.chars, word.x, word.y);
+			}
+			ctx.restore();
+
+			// Layer 4: Letter Glyphs
+			for (let wIdx = 0; wIdx < words.length; wIdx++) {
+				const word = words[wIdx]!;
+				const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
+				const bottomColor = isActive ? activeHighlight : baseLetterColor;
+
+				ctx.save();
+				let scale = 1.0;
+				if (isActive && this.config.animation?.scalePop) {
+					const maxPop = this.config.animation.scalePop;
+					let progress = 0.5;
+					if (activeWordData) {
+						const elapsed = Math.max(0, this.lastRelativeTime - activeWordData.start);
+						const dur = Math.max(0.12, activeWordData.end - activeWordData.start);
+						progress = Math.max(0, Math.min(1, elapsed / dur));
+					}
+					scale = 1.0 + (maxPop - 1.0) * Math.sin(progress * Math.PI);
+				}
+
+				if (scale !== 1.0) {
+					const cx = word.x + word.width / 2;
+					const cy = word.y + (word.height > 0 ? word.height : fontSize) / 2;
+					ctx.translate(cx, cy);
+					ctx.scale(scale, scale);
+					ctx.translate(-cx, -cy);
+				}
+
+				applyFont(ctx, world, entity, word.ranges);
+
+				const textGrad = ctx.createLinearGradient(word.x, word.y, word.x, word.y + fontSize);
+				textGrad.addColorStop(0, '#FFFFFF');
+				textGrad.addColorStop(0.35, '#FFFFFF');
+				textGrad.addColorStop(0.70, isActive ? '#BAE6FD' : '#E0F2FE');
+				textGrad.addColorStop(1, bottomColor);
+
+				ctx.fillStyle = textGrad;
+				ctx.fillText(word.chars, word.x, word.y);
+				ctx.restore();
+			}
+
+			// Layer 5: Floating Bubbles
+			if (cfg.bubbles !== false && words.length > 0) {
+				const firstWord = words[0]!;
+				const lastWord = words[words.length - 1]!;
+				this.drawBubble(ctx, firstWord.x - fontSize * 0.28, firstWord.y + fontSize * 0.72, fontSize * 0.11, cloudBorderColor, false);
+				this.drawBubble(ctx, firstWord.x - fontSize * 0.46, firstWord.y + fontSize * 0.44, fontSize * 0.065, cloudBorderColor, false);
+				this.drawBubble(ctx, lastWord.x + lastWord.width + fontSize * 0.25, lastWord.y + fontSize * 0.84, fontSize * 0.12, cloudBorderColor, false);
+				this.drawBubble(ctx, lastWord.x + lastWord.width + fontSize * 0.44, lastWord.y + fontSize * 1.04, fontSize * 0.06, cloudBorderColor, false);
+			}
 		}
+
 		ctx.restore();
+	}
 
-		// ── LAYER 2: Cloud Body (Puffy Ice-Blue Gradient) ──
+	private drawSakuraFlower(
+		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+		cx: number,
+		cy: number,
+		size: number,
+	): void {
 		ctx.save();
-		ctx.lineWidth = Math.max(fontSize * 0.26, 16);
-		ctx.lineJoin = 'round';
-		ctx.lineCap = 'round';
-		for (const word of words) {
-			applyFont(ctx, world, entity, word.ranges);
-			const cloudGrad = ctx.createLinearGradient(word.x, word.y - fontSize * 0.1, word.x, word.y + fontSize * 1.1);
-			cloudGrad.addColorStop(0, '#FFFFFF');
-			cloudGrad.addColorStop(0.35, '#E0F2FE');
-			cloudGrad.addColorStop(1, cloudBodyColor);
-			ctx.strokeStyle = cloudGrad;
-			ctx.strokeText(word.chars, word.x, word.y);
-		}
-		ctx.restore();
+		ctx.translate(cx, cy);
 
-		// ── LAYER 3: Inner Contour Outline (Deep Marine Blue separating letters from cloud) ──
+		// 5 soft pink sakura petals
+		ctx.fillStyle = '#FF85A2';
+		for (let i = 0; i < 5; i++) {
+			const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+			const px = Math.cos(angle) * size * 0.52;
+			const py = Math.sin(angle) * size * 0.52;
+			ctx.beginPath();
+			ctx.arc(px, py, size * 0.36, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		// Flower center pistil (soft pastel yellow)
+		ctx.beginPath();
+		ctx.arc(0, 0, size * 0.26, 0, Math.PI * 2);
+		ctx.fillStyle = '#FEF08A';
+		ctx.fill();
+
+		ctx.beginPath();
+		ctx.arc(0, 0, size * 0.14, 0, Math.PI * 2);
+		ctx.fillStyle = '#F59E0B';
+		ctx.fill();
+
+		ctx.restore();
+	}
+
+	private drawSparkleStar(
+		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+		cx: number,
+		cy: number,
+		size: number,
+	): void {
 		ctx.save();
-		ctx.strokeStyle = innerBorderColor;
-		ctx.lineWidth = Math.max(fontSize * 0.11, 6.5);
-		ctx.lineJoin = 'round';
-		ctx.lineCap = 'round';
-		for (const word of words) {
-			applyFont(ctx, world, entity, word.ranges);
-			ctx.strokeText(word.chars, word.x, word.y);
-		}
-		ctx.restore();
-
-		// ── LAYER 4: Letter Glyphs with Glossy Candy / Bubble Gradient Fill ──
-		ctx.save();
-		for (let wIdx = 0; wIdx < words.length; wIdx++) {
-			const word = words[wIdx]!;
-			applyFont(ctx, world, entity, word.ranges);
-
-			const isActive = (wIdx === this.currentWordIndex) || (this.currentWordIndex === -1 && words.length === 1);
-			const bottomColor = isActive ? activeHighlight : baseLetterColor;
-
-			const textGrad = ctx.createLinearGradient(word.x, word.y, word.x, word.y + fontSize);
-			textGrad.addColorStop(0, '#FFFFFF');
-			textGrad.addColorStop(0.38, '#FFFFFF');
-			textGrad.addColorStop(0.72, isActive ? '#BAE6FD' : '#E0F2FE');
-			textGrad.addColorStop(1, bottomColor);
-
-			ctx.fillStyle = textGrad;
-			ctx.fillText(word.chars, word.x, word.y);
-		}
-		ctx.restore();
-
-		// ── LAYER 5: Floating Bubble Particles (Bong bóng) ──
-		if (cfg.bubbles !== false && words.length > 0) {
-			const firstWord = words[0]!;
-			const lastWord = words[words.length - 1]!;
-
-			// Left bubble cluster near bottom-left of first word
-			this.drawBubble(ctx, firstWord.x - fontSize * 0.28, firstWord.y + fontSize * 0.72, fontSize * 0.11, cloudBorderColor);
-			this.drawBubble(ctx, firstWord.x - fontSize * 0.46, firstWord.y + fontSize * 0.44, fontSize * 0.065, cloudBorderColor);
-
-			// Right bubble cluster near bottom-right of last word
-			this.drawBubble(ctx, lastWord.x + lastWord.width + fontSize * 0.25, lastWord.y + fontSize * 0.84, fontSize * 0.12, cloudBorderColor);
-			this.drawBubble(ctx, lastWord.x + lastWord.width + fontSize * 0.44, lastWord.y + fontSize * 1.04, fontSize * 0.06, cloudBorderColor);
-
-			// Small floating bubble top-right
-			this.drawBubble(ctx, lastWord.x + lastWord.width + fontSize * 0.35, lastWord.y + fontSize * 0.35, fontSize * 0.048, cloudBorderColor);
-		}
-
+		ctx.translate(cx, cy);
+		ctx.fillStyle = '#FFFFFF';
+		ctx.beginPath();
+		ctx.moveTo(0, -size);
+		ctx.quadraticCurveTo(0, 0, size, 0);
+		ctx.quadraticCurveTo(0, 0, 0, size);
+		ctx.quadraticCurveTo(0, 0, -size, 0);
+		ctx.quadraticCurveTo(0, 0, 0, -size);
+		ctx.closePath();
+		ctx.fill();
 		ctx.restore();
 	}
 
@@ -1189,6 +1487,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		cy: number,
 		radius: number,
 		strokeColor: string,
+		isPink = false,
 	): void {
 		ctx.save();
 		ctx.beginPath();
@@ -1203,8 +1502,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			radius,
 		);
 		radGrad.addColorStop(0, '#FFFFFF');
-		radGrad.addColorStop(0.5, '#F0F9FF');
-		radGrad.addColorStop(1, '#BAE6FD');
+		radGrad.addColorStop(0.5, isPink ? '#FDF2F8' : '#F0F9FF');
+		radGrad.addColorStop(1, isPink ? '#FBCFE8' : '#BAE6FD');
 
 		ctx.fillStyle = radGrad;
 		ctx.fill();

@@ -130,6 +130,8 @@ export const CAPCUT_PRESET_OPTIONS: CaptionPresetOption[] = Object.values(CAPCUT
   }
   if (config.background?.color !== undefined) {
     slots.push({ label: "Màu nền", defaultColor: config.background.color });
+  } else if (config.bubbleCloud?.cloudColor !== undefined) {
+    slots.push({ label: "Màu nền", defaultColor: config.bubbleCloud.cloudColor });
   }
 
   return {
