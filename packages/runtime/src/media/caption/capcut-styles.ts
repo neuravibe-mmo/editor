@@ -40,6 +40,18 @@ export interface CapCutRainbowConfig {
 	stickers?: boolean;
 }
 
+export interface CapCutBubbleCloudConfig {
+	cloudColor?: number;
+	cloudBorderColor?: number;
+	innerBorderColor?: number;
+	bubbles?: boolean;
+}
+
+export interface CapCutRoyalStarsConfig {
+	starColor?: number;
+	glowColor?: string;
+}
+
 export interface CapCutPresetConfig {
 	id: string;
 	name: string;
@@ -65,6 +77,8 @@ export interface CapCutPresetConfig {
 	extrude3D?: CapCut3DExtrudeConfig;
 	background?: CapCutBackgroundConfig;
 	rainbowLetters?: CapCutRainbowConfig;
+	bubbleCloud?: CapCutBubbleCloudConfig;
+	royalStars?: CapCutRoyalStarsConfig;
 }
 
 const BASE_MONTSERRAT_STYLE: CaptionPresetStyle = {
@@ -169,16 +183,23 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		name: 'Bong Bóng Mây Xanh',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontSize: 62,
+			fontSize: 60,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
 		},
-		textColor: 0xFFFFFF,
-		activeTextColor: 0xBAE6FD,
-		stroke: { color: 0x0EA5E9, width: 8 },
-		outerStroke: { color: 0x0369A1, width: 14 },
-		shadow: { color: 0x0284C7, x: 0, y: 4, blur: 8 },
+		textColor: 0xBAE6FD,
+		activeTextColor: 0x38BDF8,
+		stroke: { color: 0x0284C7, width: 6 },
+		outerStroke: { color: 0x0284C7, width: 22 },
+		bubbleCloud: {
+			cloudColor: 0xBAE6FD,
+			cloudBorderColor: 0x0284C7,
+			innerBorderColor: 0x0369A1,
+			bubbles: true,
+		},
 	},
 
-	// 06. THE QUICK BROWN - Serif font, white base text, gold active word
+	// 06. THE QUICK BROWN - Serif font, white base text, gold active word with royal starlight sparkles
 	capcut_06: {
 		id: 'capcut_06',
 		name: 'Cổ Điển Hoàng Gia',
@@ -187,28 +208,42 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 			fontFamily: 'Playfair Display',
 			fontWeight: '700',
 			fontSize: 54,
+			letterSpacing: 1.5,
 			textCase: TextCase.UPPER,
 		},
 		textColor: 0xFFFFFF,
 		activeTextColor: 0xD97706,
-		shadow: { color: 0x000000, x: 0, y: 3, blur: 8, opacity: 0.8 },
+		shadow: { color: 0x78350F, x: 0, y: 2, blur: 6, opacity: 0.35 },
+		royalStars: {
+			starColor: 0xFFFFFF,
+			glowColor: 'rgba(253, 230, 138, 0.65)',
+		},
 	},
 
-	// 07. THE - Heavy italic font, white with black outline and straight downward 3D block extrusion
+	// 07. Bùng Nổ Comic - Bold italic uppercase, white letters with thick black outline, bright yellow jagged comic explosion on active word with pitch-black text
 	capcut_07: {
 		id: 'capcut_07',
-		name: 'Thể Thao Đổ Khối',
+		name: 'Bùng Nổ Comic',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
 			fontStyle: FontStyle.ITALIC,
 			fontWeight: '900',
-			fontSize: 60,
+			fontSize: 58,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
 		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xFFFFFF,
-		stroke: { color: 0x000000, width: 5 },
-		extrude3D: { color: 0x000000, depth: 6, dirX: 0, dirY: 1 },
-		shadow: { color: 0x000000, x: 0, y: 4, blur: 0 },
+		activeTextColor: 0x000000,
+		stroke: { color: 0x000000, width: 6 },
+		background: {
+			type: 'comic_burst',
+			color: 0xFFD600,
+			strokeColor: 0x000000,
+			strokeWidth: 5,
+			paddingX: 24,
+			paddingY: 16,
+			target: 'activeWord',
+		},
 	},
 
 	// 08. THE - Sleek translucent black rounded pill

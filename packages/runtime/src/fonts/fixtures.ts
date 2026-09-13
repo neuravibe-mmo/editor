@@ -55,6 +55,10 @@ export const WebFonts = {
 		weights: ['200', '300', '400', '500', '600', '700', '800', '900'],
 		url: 'https://fonts.gstatic.com/s/sourcecodepro/v22/HI_SiYsKILxRpg3hIP6sJ7fM7PqlPevWnsUnxg.woff2',
 	},
+	'Playfair Display': {
+		weights: ['400', '600', '700', '800', '900'],
+		url: 'https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiukDQ.ttf',
+	},
 } as const;
 
 export const FONT_WEIGHTS = {
