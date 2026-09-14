@@ -4,7 +4,7 @@
 
 import { store } from '../../world/store';
 import {
-	CaptionAlign, CaptionType, PaintType, StrokeCap,
+	CaptionAlign, CaptionType, FontStyle, PaintType, StrokeCap,
 	StrokeJoin,
 } from '../../constants';
 import {
@@ -478,7 +478,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			this.fill = null;
 			this.range = null;
 
-			const isCustomPaintPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16' || this.presetKey === 'capcut_17' || !!this.config.rainbowLetters);
+			const isCustomPaintPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16' || this.presetKey === 'capcut_17' || this.presetKey === 'capcut_18' || this.presetKey === 'capcut_19' || !!this.config.rainbowLetters || !!this.config.animation || this.config.activeTextColor !== undefined);
 			if (wordIndex !== -1 && this.config.activeTextColor !== undefined && !isCustomPaintPreset) {
 				const start = group.slice(0, wordIndex).map(w => w.text).join(' ').length + (wordIndex > 0 ? 1 : 0);
 				const end = start + group[wordIndex]!.text.length;
@@ -526,14 +526,27 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		}
 		const curFamily = store(world, TextStyle).fontFamily[entity.id()];
 		const curSize = store(world, TextStyle).fontSize[entity.id()];
+		const curWeight = store(world, TextStyle).fontWeight[entity.id()];
+		const curStyle = store(world, TextStyle).fontStyle[entity.id()];
+		const curLetterSpacing = store(world, TextStyle).letterSpacing[entity.id()];
 		const targetSize = this.config.style.fontSize ?? 58;
-		if (curFamily !== this.config.style.fontFamily || curSize !== targetSize) {
+		const targetWeight = this.config.style.fontWeight ?? '900';
+		const targetStyle = this.config.style.fontStyle ?? FontStyle.NORMAL;
+		const targetLetterSpacing = this.config.style.letterSpacing ?? 0;
+
+		if (curFamily !== this.config.style.fontFamily || curSize !== targetSize || curWeight !== targetWeight || curStyle !== targetStyle || curLetterSpacing !== targetLetterSpacing) {
 			entity.set(TextStyle, {
 				...this.config.style,
 				fontSize: targetSize,
+				fontWeight: targetWeight,
+				fontStyle: targetStyle,
+				letterSpacing: targetLetterSpacing,
 			});
 			store(world, TextStyle).fontSize[entity.id()] = targetSize;
 			store(world, TextStyle).fontFamily[entity.id()] = this.config.style.fontFamily;
+			store(world, TextStyle).fontWeight[entity.id()] = targetWeight;
+			store(world, TextStyle).fontStyle[entity.id()] = targetStyle;
+			store(world, TextStyle).letterSpacing[entity.id()] = targetLetterSpacing;
 			loadWebFont(world, this.config.style.fontFamily as any);
 		}
 
@@ -546,7 +559,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		if (!chars || !chars.trim()) return;
 
 		const isNeonPreset = (this.presetKey === 'capcut_09' || this.presetKey === 'capcut_10' || this.presetKey === 'capcut_13' || this.presetKey === 'capcut_16');
-		const isCustomDecorationPreset = (isNeonPreset || this.presetKey === 'capcut_17' || !!this.config.bubbleCloud || !!this.config.rainbowLetters);
+		const isCustomDecorationPreset = (isNeonPreset || this.presetKey === 'capcut_17' || this.presetKey === 'capcut_18' || !!this.config.bubbleCloud || !!this.config.rainbowLetters);
 		const isNoShadowPreset = (!this.config.shadow || isCustomDecorationPreset);
 
 		// Proactively remove stale Shadow/Stroke child entities or update them to preset's current style
@@ -635,6 +648,31 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			}
 		}
 
+		// Ensure preset's typography is applied to entity before text layout
+		if (this.config.style) {
+			const currentStyle = entity.get(TextStyle);
+			const needsUpdate =
+				!currentStyle ||
+				currentStyle.fontFamily !== this.config.style.fontFamily ||
+				currentStyle.fontWeight !== this.config.style.fontWeight ||
+				currentStyle.fontSize !== this.config.style.fontSize ||
+				currentStyle.letterSpacing !== this.config.style.letterSpacing ||
+				currentStyle.textCase !== this.config.style.textCase;
+
+			if (needsUpdate) {
+				entity.set(TextStyle, {
+					...currentStyle,
+					...this.config.style,
+				});
+				loadWebFont(
+					world,
+					this.config.style.fontFamily as any,
+					this.config.style.fontStyle,
+					this.config.style.fontWeight,
+				);
+			}
+		}
+
 		// Tokenize and shape text to get exact bounding box and token positions
 		tokenizeText(world, entity);
 		shapeTokens(world, entity);
@@ -644,6 +682,66 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 		const words = lines.flat().filter(w => w.chars.trim().length > 0);
 		if (!words.length) return;
+
+		// ── Phrase Entrance Motion Animation (Chuyển động khi xuất hiện phụ đề) ──
+		const activeGroup = (this.currentGroupIndex >= 0 && this.currentGroupIndex < this.groups.length)
+			? this.groups[this.currentGroupIndex]
+			: null;
+
+		let entranceScale = 1.0;
+		let entranceOffsetY = 0;
+		let entranceAlpha = 1.0;
+
+		const animConfig = this.config.animation;
+		const entranceType = animConfig?.entrance ?? 'bounce';
+		const entranceDuration = animConfig?.entranceDuration ?? 0.24;
+
+		if (entranceType !== 'none' && activeGroup && activeGroup.length > 0) {
+			const groupStart = activeGroup[0]!.start;
+			const elapsed = this.lastRelativeTime - groupStart;
+
+			if (elapsed >= 0 && elapsed < entranceDuration) {
+				const p = elapsed / entranceDuration;
+				if (entranceType === 'bounce' || entranceType === 'pop') {
+					// Spring overshoot curve (ease-out-back)
+					const s = 1.6;
+					const p1 = p - 1;
+					const spring = 1 + (s + 1) * (p1 * p1 * p1) + s * (p1 * p1);
+					entranceScale = 0.78 + 0.22 * spring;
+					entranceOffsetY = (1 - Math.min(1.06, spring)) * 14;
+				} else if (entranceType === 'slide_up') {
+					const ease = 1 - Math.pow(1 - p, 3);
+					entranceOffsetY = (1 - ease) * 20;
+				} else if (entranceType === 'fade') {
+					entranceScale = 0.95 + 0.05 * p;
+				}
+				entranceAlpha = Math.min(1.0, elapsed / 0.08);
+			}
+		}
+
+		const hasEntranceTransform = (entranceScale !== 1.0 || entranceOffsetY !== 0 || entranceAlpha !== 1.0);
+
+		if (hasEntranceTransform) {
+			let minX = Infinity;
+			let maxX = -Infinity;
+			let minY = Infinity;
+			let maxY = -Infinity;
+			const fontSize = this.config.style.fontSize ?? 58;
+			for (const w of words) {
+				minX = Math.min(minX, w.x);
+				maxX = Math.max(maxX, w.x + w.width);
+				minY = Math.min(minY, w.y);
+				maxY = Math.max(maxY, w.y + (w.height > 0 ? w.height : fontSize));
+			}
+			const phraseCx = (minX + maxX) / 2;
+			const phraseCy = (minY + maxY) / 2;
+
+			ctx.save();
+			ctx.translate(phraseCx, phraseCy + entranceOffsetY);
+			ctx.scale(entranceScale, entranceScale);
+			ctx.translate(-phraseCx, -phraseCy);
+			ctx.globalAlpha *= entranceAlpha;
+		}
 
 		// 1. Draw Background Shapes (Comic Burst, Box, Pill)
 		if (this.config.background) {
@@ -664,9 +762,11 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					const tMaxX = activeToken.x + activeToken.width;
 					const isCapcut03 = this.presetKey === 'capcut_03';
 					const isCapcut04 = this.presetKey === 'capcut_04';
-					const isTagBox = isCapcut03 || isCapcut04 || this.presetKey === 'capcut_07' || bg.type === 'comic_burst';
+					const isCapcut26 = this.presetKey === 'capcut_26';
+					const isCapcut28 = this.presetKey === 'capcut_28';
+					const isTagBox = isCapcut03 || isCapcut04 || this.presetKey === 'capcut_07' || this.presetKey === 'capcut_25' || isCapcut26 || isCapcut28 || bg.type === 'comic_burst';
 
-					// For capcut_03, 04, 07 & comic_burst, use exact token top & bottom to center the box around glyphs
+					// For capcut_03, 04, 07, 26 & comic_burst, use exact token top & bottom to center the box around glyphs
 					const glyphHeight = (activeToken.bottom > activeToken.top)
 						? (activeToken.bottom - activeToken.top)
 						: (activeToken.height > 0 ? activeToken.height : fontSize);
@@ -677,7 +777,69 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						? (activeToken.bottom ?? (activeToken.y + glyphHeight / 2))
 						: activeToken.y + (activeToken.height > 0 ? activeToken.height : fontSize) / 2;
 
-					if (bg.type === 'comic_burst') {
+					if (isCapcut26) {
+						// Alternating Comic Highlights for CapCut Preset 26:
+						// - Even active words (0, 2, 4...): Yellow Rectangular Tag Box with Red Text (matches preset thumbnail 'The Quick')
+						// - Odd active words (1, 3, 5...): Yellow Comic Spiky Burst with Black Text (matches 'Brown', 'Jumps', 'Lazy Dog')
+						const isOdd = (this.currentWordIndex % 2 !== 0);
+						const burstFill = (colors?.[3] !== undefined)
+							? (typeof colors[3] === 'string' ? colors[3] : colorToHex(colors[3]))
+							: colorToHex(bg.color);
+						const burstStroke = (colors?.[2] !== undefined)
+							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+							: (bg.strokeColor !== undefined ? colorToHex(bg.strokeColor) : '#000000');
+
+						let scale = 1;
+						if (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
+							const activeWordData = this.groups[this.currentGroupIndex]?.[this.currentWordIndex];
+							if (activeWordData) {
+								const elapsed = this.lastRelativeTime - activeWordData.start;
+								const animDuration = 0.16;
+								if (elapsed >= 0 && elapsed < animDuration) {
+									const progress = elapsed / animDuration;
+									scale = 0.84 + 0.32 * Math.sin(progress * Math.PI);
+								}
+							}
+						}
+
+						const cx = (tMinX + tMaxX) / 2;
+						const cy = (tMinY + tMaxY) / 2;
+
+						if (isOdd) {
+							// Comic Spiky Burst for odd active words
+							const rx = Math.max((tMaxX - tMinX) / 2 + padX, 48);
+							const ry = Math.max((tMaxY - tMinY) / 2 + padY, 32);
+							drawComicBurst(
+								ctx,
+								cx,
+								cy,
+								rx,
+								ry,
+								burstFill,
+								burstStroke,
+								bg.strokeWidth ?? 4.5,
+								scale,
+							);
+						} else {
+							// Rectangular Tag Box for even active words
+							const baseW = Math.max((tMaxX - tMinX) + 24, 40);
+							const baseH = Math.max((tMaxY - tMinY) + 14, 30);
+							const boxW = baseW * scale;
+							const boxH = baseH * scale;
+							drawRoundedBox(
+								ctx,
+								cx - boxW / 2,
+								cy - boxH / 2,
+								boxW,
+								boxH,
+								4,
+								burstFill,
+								burstStroke,
+								2.5,
+								1,
+							);
+						}
+					} else if (bg.type === 'comic_burst') {
 						let scale = 1;
 						if (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
 							const activeWordData = this.groups[this.currentGroupIndex]?.[this.currentWordIndex];
@@ -716,14 +878,16 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						);
 					} else {
 						let scale = 1;
-						if (isCapcut04 && this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
+						if ((isCapcut04 || isCapcut28) && this.currentGroupIndex >= 0 && this.currentWordIndex >= 0) {
 							const activeWordData = this.groups[this.currentGroupIndex]?.[this.currentWordIndex];
 							if (activeWordData) {
 								const elapsed = this.lastRelativeTime - activeWordData.start;
-								const animDuration = 0.15;
+								const animDuration = isCapcut28 ? 0.18 : 0.15;
 								if (elapsed >= 0 && elapsed < animDuration) {
 									const progress = elapsed / animDuration;
-									scale = 1 + 0.15 * Math.cos((progress * Math.PI) / 2);
+									scale = isCapcut28
+										? (1 + 0.18 * Math.sin(progress * Math.PI))
+										: (1 + 0.15 * Math.cos((progress * Math.PI) / 2));
 								}
 							}
 						}
@@ -741,6 +905,8 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 							? (typeof colors[3] === 'string' ? colors[3] : colorToHex(colors[3]))
 							: (isCapcut03 && colors?.[2])
 							? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+							: (isCapcut28 && colors?.[0])
+							? (typeof colors[0] === 'string' ? colors[0] : colorToHex(colors[0]))
 							: colorToHex(bg.color);
 
 						drawRoundedBox(
@@ -754,10 +920,14 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 							bg.strokeColor !== undefined ? colorToHex(bg.strokeColor) : undefined,
 							bg.strokeWidth ?? 0,
 							bg.opacity ?? 1,
-							isCapcut03
-								? { color: 'rgba(0, 0, 0, 0.4)', blur: 4, x: 0, y: 2 }
+							isCapcut03 || isCapcut28
+								? { color: isCapcut28 ? 'rgba(69, 10, 10, 0.6)' : 'rgba(0, 0, 0, 0.4)', blur: 4, x: 0, y: isCapcut28 ? 3 : 2 }
 								: undefined,
 						);
+
+						if (isCapcut28) {
+							this.drawBloodBoxDrips(ctx, boxX, boxY, boxW, boxH, boxBgColor);
+						}
 					}
 				}
 			} else {
@@ -1017,6 +1187,13 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 				ctx.scale(scale, scale);
 				ctx.translate(-wordCenterX, -wordCenterY);
 
+				if (this.config.style.fontStyle === FontStyle.ITALIC) {
+					const midY = word.y + (word.height > 0 ? word.height : fontSize) / 2;
+					ctx.translate(wordCenterX, midY);
+					ctx.transform(1, 0, -0.22, 1, 0, 0);
+					ctx.translate(-wordCenterX, -midY);
+				}
+
 				// 1. Radiant neon glow aura pass (Preset 12)
 				if (this.config.glow && shouldRainbow) {
 					for (let i = 0; i < word.chars.length; i++) {
@@ -1130,7 +1307,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			ctx.restore();
 		} else if (this.config.bubbleCloud) {
 			this.drawBubbleCloud(ctx, world, entity, words);
-		} else if (this.config.animation || this.config.glow) {
+		} else if (this.config.animation || this.config.glow || this.config.tilt || this.config.activeTextColor !== undefined) {
 			this.drawAnimatedWords(ctx, world, entity, words, activeColor, baseColor, colors);
 			if (this.config.royalStars) {
 				this.drawRoyalStars(ctx, words);
@@ -1140,6 +1317,10 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			if (this.config.royalStars) {
 				this.drawRoyalStars(ctx, words);
 			}
+		}
+
+		if (hasEntranceTransform) {
+			ctx.restore();
 		}
 	}
 
@@ -1158,11 +1339,33 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 
 		const activeAccent = (activeColor !== undefined)
 			? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
-			: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#00F2FF');
+			: (this.config.activeTextColor !== undefined
+				? colorToHex(this.config.activeTextColor)
+				: (this.config.textColor !== undefined ? colorToHex(this.config.textColor) : '#FFFFFF'));
 
 		ctx.save();
 		ctx.textAlign = 'start';
 		ctx.textBaseline = 'top';
+
+		// Tilt / rotate whole phrase if configured
+		const tilt = this.config.tilt ?? (this.presetKey === 'capcut_18' ? 8.4 : 0);
+		if (tilt !== 0) {
+			let minX = Infinity;
+			let maxX = -Infinity;
+			let minY = Infinity;
+			let maxY = -Infinity;
+			for (const w of words) {
+				minX = Math.min(minX, w.x);
+				maxX = Math.max(maxX, w.x + w.width);
+				minY = Math.min(minY, w.y);
+				maxY = Math.max(maxY, w.y + (w.height > 0 ? w.height : fontSize));
+			}
+			const phraseCenterX = (minX + maxX) / 2;
+			const phraseCenterY = (minY + maxY) / 2;
+			ctx.translate(phraseCenterX, phraseCenterY);
+			ctx.rotate((tilt * Math.PI) / 180);
+			ctx.translate(-phraseCenterX, -phraseCenterY);
+		}
 
 		const activeWordData = (this.currentGroupIndex >= 0 && this.currentWordIndex >= 0)
 			? this.groups[this.currentGroupIndex]?.[this.currentWordIndex]
@@ -1235,7 +1438,36 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			}
 			ctx.globalAlpha = wordAlpha;
 
+			// Synthetic forward italic slant on canvas for italic presets
+			const isItalic = this.config.style.fontStyle === FontStyle.ITALIC || this.presetKey === 'capcut_18';
+			if (isItalic) {
+				ctx.translate(cx, cy);
+				ctx.transform(1, 0, -0.22, 1, 0, 0);
+				ctx.translate(-cx, -cy);
+			}
+
 			applyFont(ctx, world, entity, word.ranges);
+
+			if (this.presetKey === 'capcut_27') {
+				if (!isActive) {
+					// Inactive words in CapCut Preset 27 are rendered with elegant Italic styling
+					if (!ctx.font.includes('italic')) {
+						ctx.font = 'italic ' + ctx.font;
+					}
+				} else {
+					// Active word is prominent upright bold display
+					ctx.font = ctx.font.replace(/\bitalic\s*/g, '');
+				}
+			}
+
+			// Determine hollow state for Preset 24 (Chữ Rỗng Phá Cách / Hollow Outline)
+			const isHollowPreset24 = (this.presetKey === 'capcut_24' || !!this.config.hollowEffect) && (
+				words.length === 1
+					? true
+					: words.length === 2
+						? wIdx === 1
+						: (wIdx % 2 === 1 || (wIdx === 2 && words.length >= 3 && words.length <= 5))
+			);
 
 			// ── LAYER 1: Ambient Glow Aura ──
 			if (this.config.glow) {
@@ -1270,14 +1502,15 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					ctx.fillText(word.chars, word.x, word.y);
 					ctx.restore();
 				} else if (isActive) {
-					// Active neon glow (Electric Cyan for preset 10, Radiant Orange for preset 09)
+					// Active neon or golden aura glow
 					ctx.save();
-					ctx.shadowColor = activeAccent;
+					const glowColor = (this.config.glow?.color !== undefined) ? this.config.glow.color : activeAccent;
+					ctx.shadowColor = glowColor;
 					ctx.shadowBlur = glowBlur;
-					ctx.fillStyle = activeAccent;
+					ctx.fillStyle = glowColor;
 					ctx.globalAlpha = wordAlpha * glowAlpha;
 					ctx.fillText(word.chars, word.x, word.y);
-					// Second pass for intense radiant neon core
+					// Second pass for intense radiant core
 					ctx.shadowBlur = glowBlur * 1.6;
 					ctx.fillText(word.chars, word.x, word.y);
 					ctx.restore();
@@ -1304,11 +1537,90 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					ctx.globalAlpha = 0.35;
 					ctx.fillText(word.chars, word.x, word.y);
 					ctx.restore();
+				} else if (this.presetKey === 'capcut_23') {
+					// Soft electric cyan halo glow ONLY for active word in Preset 23 (Băng Giá Bắc Cực)
+					if (isActive) {
+						ctx.save();
+						const cyanAura = activeAccent || '#38BDF8';
+						ctx.shadowColor = cyanAura;
+						ctx.shadowBlur = glowBlur * 1.3;
+						ctx.fillStyle = cyanAura;
+						ctx.globalAlpha = wordAlpha * glowAlpha * 0.75;
+						ctx.fillText(word.chars, word.x, word.y);
+						ctx.shadowBlur = glowBlur * 0.65;
+						ctx.fillText(word.chars, word.x, word.y);
+						ctx.restore();
+					}
+				} else if (this.presetKey === 'capcut_27') {
+					// Luminous electric cyan/ice aura ONLY for active word in Preset 27 (Bạc Kim Ánh Băng)
+					if (isActive) {
+						ctx.save();
+						const cyanAura = (colors?.[0] !== undefined)
+							? (typeof colors[0] === 'string' ? colors[0] : colorToHex(colors[0]))
+							: '#00F2FF';
+						ctx.shadowColor = cyanAura;
+						ctx.shadowBlur = glowBlur * 1.4;
+						ctx.fillStyle = cyanAura;
+						ctx.globalAlpha = wordAlpha * glowAlpha * 0.85;
+						ctx.fillText(word.chars, word.x, word.y);
+						ctx.shadowBlur = glowBlur * 0.7;
+						ctx.fillText(word.chars, word.x, word.y);
+						ctx.restore();
+					}
+				} else if (this.presetKey === 'capcut_24' && isActive) {
+					// Clean pure white radiance bloom on active word in Preset 24
+					ctx.save();
+					ctx.shadowColor = 'rgba(255, 255, 255, 0.75)';
+					ctx.shadowBlur = 10;
+					ctx.strokeStyle = '#FFFFFF';
+					ctx.lineWidth = isHollowPreset24 ? 4.5 : 3.0;
+					ctx.lineJoin = 'round';
+					ctx.lineCap = 'round';
+					ctx.strokeText(word.chars, word.x, word.y);
+					ctx.restore();
+				} else if (this.config.glow) {
+					// Soft ambient aura for other glow presets (e.g. Preset 21 Hoàng Kim Lấp Lánh)
+					ctx.save();
+					ctx.shadowColor = this.config.glow.color;
+					ctx.shadowBlur = Math.round(glowBlur * 0.7);
+					ctx.fillStyle = this.config.glow.color;
+					ctx.globalAlpha = wordAlpha * 0.45;
+					ctx.fillText(word.chars, word.x, word.y);
+					ctx.restore();
 				}
 			}
 
 			// ── LAYER 2: Shadow & 3D Extrusion (skipped for neon presets) ──
-			if (this.config.shadow && !this.config.bubbleCloud && !isNeonPreset) {
+			if (this.presetKey === 'capcut_23' || this.presetKey === 'capcut_27') {
+				// Solid crisp 3D bevel base in dark midnight navy (downward 1px..4px, NO fuzzy blur!)
+				ctx.save();
+				const bevelColor = (colors?.[2] !== undefined)
+					? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
+					: (this.presetKey === 'capcut_27' ? '#082F49' : '#071524');
+				ctx.fillStyle = bevelColor;
+				ctx.strokeStyle = bevelColor;
+				ctx.lineWidth = (this.config.stroke?.width ?? 5.0);
+				ctx.lineJoin = 'round';
+				ctx.lineCap = 'round';
+				for (let dy = 1; dy <= (isActive ? 4 : 2); dy++) {
+					ctx.strokeText(word.chars, word.x, word.y + dy);
+					ctx.fillText(word.chars, word.x, word.y + dy);
+				}
+				ctx.restore();
+			} else if (this.presetKey === 'capcut_24') {
+				// Crisp black silhouette drop shadow (+2px, +3px) for Preset 24
+				ctx.save();
+				ctx.fillStyle = '#000000';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = isHollowPreset24 ? 7.0 : 5.0;
+				ctx.lineJoin = 'round';
+				ctx.lineCap = 'round';
+				ctx.strokeText(word.chars, word.x + 2, word.y + 3);
+				if (!isHollowPreset24) {
+					ctx.fillText(word.chars, word.x + 2, word.y + 3);
+				}
+				ctx.restore();
+			} else if (this.config.shadow && !this.config.bubbleCloud && !isNeonPreset && !(this.presetKey === 'capcut_25' && isActive)) {
 				ctx.save();
 				ctx.shadowColor = colorToHex(this.config.shadow.color);
 				ctx.shadowBlur = this.config.shadow.blur;
@@ -1321,7 +1633,13 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			}
 
 			// ── LAYER 3: Stroke (Outline) ──
-			const skipStroke = isActive && (this.presetKey === 'capcut_03' || this.presetKey === 'capcut_04' || this.presetKey === 'capcut_07');
+			const skipStroke = isActive && (
+				this.presetKey === 'capcut_03' ||
+				this.presetKey === 'capcut_04' ||
+				this.presetKey === 'capcut_07' ||
+				this.presetKey === 'capcut_25' ||
+				(this.presetKey === 'capcut_26' && this.currentWordIndex % 2 === 0)
+			);
 			if (!skipStroke) {
 				if (this.presetKey === 'capcut_16') {
 					// Brilliant crisp Electric Cyan neon outline
@@ -1359,6 +1677,35 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					ctx.lineCap = 'round';
 					ctx.strokeText(word.chars, word.x, word.y);
 					ctx.restore();
+				} else if (this.presetKey === 'capcut_24' || this.config.hollowEffect) {
+					ctx.save();
+					if (isHollowPreset24) {
+						// Outer black backing stroke so white outline is readable over any background
+						ctx.strokeStyle = '#000000';
+						ctx.lineWidth = 6.5;
+						ctx.lineJoin = 'round';
+						ctx.lineCap = 'round';
+						ctx.strokeText(word.chars, word.x, word.y);
+
+						// Inner crisp white hollow outline
+						ctx.strokeStyle = '#FFFFFF';
+						ctx.lineWidth = isActive ? 4.8 : 4.0;
+						ctx.lineJoin = 'round';
+						ctx.lineCap = 'round';
+						if (isActive) {
+							ctx.shadowColor = '#FFFFFF';
+							ctx.shadowBlur = 6;
+						}
+						ctx.strokeText(word.chars, word.x, word.y);
+					} else {
+						// Solid word: Crisp dark stroke around white text
+						ctx.strokeStyle = '#000000';
+						ctx.lineWidth = 5.0;
+						ctx.lineJoin = 'round';
+						ctx.lineCap = 'round';
+						ctx.strokeText(word.chars, word.x, word.y);
+					}
+					ctx.restore();
 				} else if (this.config.stroke && !this.config.bubbleCloud) {
 					// Clean crisp dark stroke on inactive words for other presets
 					ctx.save();
@@ -1366,7 +1713,9 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 						? (typeof colors[2] === 'string' ? colors[2] : colorToHex(colors[2]))
 						: colorToHex(this.config.stroke.color);
 					ctx.strokeStyle = strokeColorHex;
-					ctx.lineWidth = this.config.stroke.width;
+					ctx.lineWidth = (this.presetKey === 'capcut_23' && isActive)
+						? (this.config.stroke.width + 0.6)
+						: this.config.stroke.width;
 					ctx.lineJoin = 'round';
 					ctx.lineCap = 'round';
 					ctx.strokeText(word.chars, word.x, word.y);
@@ -1386,6 +1735,100 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 			} else if (isNeonPreset) {
 				// Neon presets have a luminous white-hot core for both active and inactive!
 				ctx.fillStyle = '#FFFFFF';
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (this.presetKey === 'capcut_21') {
+				// Rich metallic gold gradient for Preset 21 (Hoàng Kim Lấp Lánh)
+				const wordH = word.height > 0 ? word.height : fontSize;
+				const grad = ctx.createLinearGradient(word.x, word.y, word.x, word.y + wordH);
+				if (isActive) {
+					grad.addColorStop(0, '#FFFFFF');
+					grad.addColorStop(0.28, '#FEF08A');
+					grad.addColorStop(1, '#F59E0B');
+				} else {
+					grad.addColorStop(0, '#FEF08A');
+					grad.addColorStop(0.35, '#FACC15');
+					grad.addColorStop(1, '#D97706');
+				}
+				ctx.fillStyle = grad;
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (this.presetKey === 'capcut_23') {
+				// Arctic Ice Glacier Gradient for Preset 23 (Băng Giá Bắc Cực)
+				const wordH = word.height > 0 ? word.height : fontSize;
+				const grad = ctx.createLinearGradient(word.x, word.y, word.x, word.y + wordH);
+				if (isActive) {
+					// Brilliant ice cyan crystal: pure frosted white top -> electric cyan -> deep arctic azure
+					const cAccent = activeAccent || '#38BDF8';
+					grad.addColorStop(0, '#FFFFFF');
+					grad.addColorStop(0.18, '#E0F7FF');
+					grad.addColorStop(0.48, cAccent);
+					grad.addColorStop(0.82, '#0284C7');
+					grad.addColorStop(1, '#0369A1');
+				} else {
+					// Frosted white sheen: pure white -> soft ice white -> crisp ice cyan-white
+					const cBase = (baseColor !== undefined)
+						? (typeof baseColor === 'string' ? baseColor : colorToHex(baseColor))
+						: '#F0F9FF';
+					grad.addColorStop(0, '#FFFFFF');
+					grad.addColorStop(0.40, cBase);
+					grad.addColorStop(1, '#C7E9FF');
+				}
+				ctx.fillStyle = grad;
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (this.presetKey === 'capcut_24' || this.config.hollowEffect) {
+				if (!isHollowPreset24) {
+					// Pure crisp solid white fill for non-hollow words
+					ctx.fillStyle = '#FFFFFF';
+					if (isActive) {
+						ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+						ctx.shadowBlur = 6;
+					}
+					ctx.fillText(word.chars, word.x, word.y);
+				}
+				// Hollow words skip fill to preserve the transparent/cutout center!
+			} else if (this.presetKey === 'capcut_26' && isActive) {
+				// CapCut Preset 26 (Comic Vàng Nổ Gai / Comic Alternating):
+				// Even active words (0, 2, 4...) -> Vibrant Comic Red text inside Yellow Tag Box
+				// Odd active words (1, 3, 5...)  -> Deep Comic Ink Black text inside Yellow Spiky Burst
+				const isOdd = (this.currentWordIndex % 2 !== 0);
+				const redAccent = (activeColor !== undefined)
+					? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
+					: (this.config.activeTextColor !== undefined ? colorToHex(this.config.activeTextColor) : '#EF4444');
+				ctx.fillStyle = isOdd ? '#000000' : redAccent;
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (this.presetKey === 'capcut_27') {
+				// Metallic Chrome Holographic Gradient for Preset 27 (Bạc Kim Ánh Băng)
+				const wordH = word.height > 0 ? word.height : fontSize;
+				const grad = ctx.createLinearGradient(word.x, word.y, word.x, word.y + wordH);
+				if (isActive) {
+					// Luminous Holographic Chrome: Iridescent Lavender top -> Pure White Chrome Sheen -> Electric Ice Cyan
+					const cAccent = (activeColor !== undefined)
+						? (typeof activeColor === 'string' ? activeColor : colorToHex(activeColor))
+						: '#38BDF8';
+					grad.addColorStop(0, '#C4B5FD');
+					grad.addColorStop(0.22, '#EDE9FE');
+					grad.addColorStop(0.44, '#FFFFFF');
+					grad.addColorStop(0.68, '#7DD3FC');
+					grad.addColorStop(0.88, cAccent);
+					grad.addColorStop(1, '#0284C7');
+				} else {
+					// Inactive words: Clean frosted white metallic sheen
+					const cBase = (baseColor !== undefined)
+						? (typeof baseColor === 'string' ? baseColor : colorToHex(baseColor))
+						: '#FFFFFF';
+					grad.addColorStop(0, '#FFFFFF');
+					grad.addColorStop(0.70, cBase);
+					grad.addColorStop(1, '#E2E8F0');
+				}
+				ctx.fillStyle = grad;
+				ctx.fillText(word.chars, word.x, word.y);
+			} else if (this.presetKey === 'capcut_28') {
+				// Splatter Crimson Distress (Vết Loang Máu Đỏ):
+				// Active word inside Crimson Highlight Box: White text with black outline
+				// Inactive words: Bone White text with black outline
+				const boneWhite = (baseColor !== undefined)
+					? (typeof baseColor === 'string' ? baseColor : colorToHex(baseColor))
+					: '#FFFFFF';
+				ctx.fillStyle = boneWhite;
 				ctx.fillText(word.chars, word.x, word.y);
 			} else {
 				const wordFill = isActive
@@ -1408,6 +1851,11 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 					elapsed,
 					activeAccent,
 				);
+			}
+
+			// ── LAYER 5c: Crimson Blood Splatters & Drips for Preset 28 (Vết Loang Máu Đỏ) ──
+			if (this.presetKey === 'capcut_28') {
+				this.drawBloodSplatter(ctx, word, isActive, colors);
 			}
 
 			ctx.restore();
@@ -1860,13 +2308,21 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 	): void {
 		ctx.save();
 
-		// 1. Soft golden radial bloom behind the star
+		// 1. Radial bloom behind the star (Golden for preset 21, Ice Cyan for preset 27)
 		const glowRadius = size * 1.6;
 		const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
-		glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * glowAlpha})`);
-		glowGrad.addColorStop(0.25, `rgba(253, 230, 138, ${0.7 * glowAlpha})`);
-		glowGrad.addColorStop(0.6, `rgba(217, 119, 6, ${0.3 * glowAlpha})`);
-		glowGrad.addColorStop(1, 'rgba(217, 119, 6, 0)');
+		const isPreset27 = this.presetKey === 'capcut_27';
+		if (isPreset27) {
+			glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.95 * glowAlpha})`);
+			glowGrad.addColorStop(0.25, `rgba(186, 230, 253, ${0.8 * glowAlpha})`);
+			glowGrad.addColorStop(0.6, `rgba(0, 242, 255, ${0.4 * glowAlpha})`);
+			glowGrad.addColorStop(1, 'rgba(0, 242, 255, 0)');
+		} else {
+			glowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.9 * glowAlpha})`);
+			glowGrad.addColorStop(0.25, `rgba(253, 230, 138, ${0.7 * glowAlpha})`);
+			glowGrad.addColorStop(0.6, `rgba(217, 119, 6, ${0.3 * glowAlpha})`);
+			glowGrad.addColorStop(1, 'rgba(217, 119, 6, 0)');
+		}
 		ctx.fillStyle = glowGrad;
 		ctx.beginPath();
 		ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
@@ -1899,7 +2355,7 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		ctx.quadraticCurveTo(cx, cy, cx + diagArm, cy + diagArm);
 		ctx.quadraticCurveTo(cx, cy, cx - diagArm, cy + diagArm);
 		ctx.closePath();
-		ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+		ctx.fillStyle = isPreset27 ? 'rgba(224, 242, 254, 0.95)' : 'rgba(255, 255, 255, 0.9)';
 		ctx.fill();
 
 		// Bright center diamond core
@@ -1920,9 +2376,16 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 	): void {
 		ctx.save();
 		const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 2);
-		grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
-		grad.addColorStop(0.4, `rgba(254, 240, 138, ${alpha * 0.8})`);
-		grad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+		const isPreset27 = this.presetKey === 'capcut_27';
+		if (isPreset27) {
+			grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+			grad.addColorStop(0.4, `rgba(186, 230, 253, ${alpha * 0.85})`);
+			grad.addColorStop(1, 'rgba(0, 242, 255, 0)');
+		} else {
+			grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+			grad.addColorStop(0.4, `rgba(254, 240, 138, ${alpha * 0.8})`);
+			grad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+		}
 		ctx.fillStyle = grad;
 		ctx.beginPath();
 		ctx.arc(cx, cy, radius * 2, 0, Math.PI * 2);
@@ -1932,6 +2395,176 @@ export class CapCutCaptionDecoder implements CaptionDecoder {
 		ctx.beginPath();
 		ctx.arc(cx, cy, radius * 0.7, 0, Math.PI * 2);
 		ctx.fill();
+		ctx.restore();
+	}
+
+	private drawBloodBoxDrips(
+		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+		bx: number,
+		by: number,
+		bw: number,
+		bh: number,
+		crimsonColor = '#DC2626',
+	): void {
+		ctx.save();
+		const bloodDark = '#450A0A';
+		const bloodBright = '#EF4444';
+
+		let seed = (Math.abs(this.currentWordIndex) * 997 + 101) | 0;
+		const rnd = () => {
+			seed = (seed * 9301 + 49297) % 233280;
+			return Math.abs(seed) / 233280;
+		};
+
+		// 1. Drips flowing downwards from bottom edge of active box
+		const numDrips = 5;
+		const dripInterval = bw / (numDrips + 1);
+		for (let d = 0; d < numDrips; d++) {
+			const dx = bx + dripInterval * (d + 1) + (rnd() - 0.5) * (dripInterval * 0.4);
+			const dripLen = bh * 0.35 + rnd() * (bh * 0.45);
+			const dripW = Math.max(1, 3.2 + rnd() * 1.8);
+			const dy1 = by + bh;
+			const dy2 = dy1 + dripLen;
+
+			// Dark shadow
+			ctx.strokeStyle = bloodDark;
+			ctx.lineWidth = dripW + 1.2;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(dx + 1, dy1);
+			ctx.lineTo(dx + 1, dy2 + 1);
+			ctx.stroke();
+
+			// Crimson trail
+			ctx.strokeStyle = crimsonColor;
+			ctx.lineWidth = dripW;
+			ctx.beginPath();
+			ctx.moveTo(dx, dy1);
+			ctx.lineTo(dx, dy2);
+			ctx.stroke();
+
+			// Droplet bulb
+			const r = Math.max(0.5, dripW * 0.85);
+			ctx.fillStyle = bloodBright;
+			ctx.beginPath();
+			ctx.arc(dx, dy2, r, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		// 2. Blood splatter droplets around the active box
+		const numDrops = 14;
+		for (let s = 0; s < numDrops; s++) {
+			const sx = bx + (rnd() - 0.1) * (bw * 1.2);
+			const sy = by + (rnd() - 0.15) * (bh * 1.3);
+			if (sx > bx + 6 && sx < bx + bw - 6 && sy > by + 6 && sy < by + bh - 6) {
+				continue;
+			}
+			const sRad = Math.max(0.5, 1.2 + rnd() * 2.2);
+			const dropColor = rnd() > 0.4 ? crimsonColor : bloodDark;
+
+			ctx.fillStyle = bloodDark;
+			ctx.beginPath();
+			ctx.arc(sx + 0.8, sy + 0.8, sRad, 0, Math.PI * 2);
+			ctx.fill();
+
+			ctx.fillStyle = rnd() > 0.5 ? bloodBright : dropColor;
+			ctx.beginPath();
+			ctx.arc(sx, sy, sRad, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		ctx.restore();
+	}
+
+	private drawBloodSplatter(
+		ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+		word: { chars: string; x: number; y: number; width: number; height: number; top?: number; bottom?: number },
+		isActive: boolean,
+		colors?: Array<string | number>,
+	): void {
+		const fontSize = this.config.style.fontSize ?? 58;
+		const h = word.height > 0 ? word.height : fontSize;
+		const w = word.width;
+		const x = word.x;
+		const y = word.y;
+
+		let seed = 1337;
+		for (let i = 0; i < word.chars.length; i++) {
+			seed = ((seed << 5) - seed + word.chars.charCodeAt(i)) | 0;
+		}
+		if (isActive) seed = (seed + 9999) | 0;
+		seed = Math.abs(seed) + 1;
+		const rnd = () => {
+			seed = (seed * 9301 + 49297) % 233280;
+			return Math.abs(seed) / 233280;
+		};
+
+		const bloodDark = '#450A0A';
+		const bloodMid = (colors?.[0] !== undefined)
+			? (typeof colors[0] === 'string' ? colors[0] : colorToHex(colors[0]))
+			: '#DC2626';
+		const bloodBright = '#EF4444';
+
+		ctx.save();
+
+		if (!isActive) {
+			// 1. Blood Drips flowing downwards from bottom of glyphs
+			const numDrips = Math.max(2, Math.min(4, Math.floor(word.chars.length * 0.7)));
+			for (let d = 0; d < numDrips; d++) {
+				const dx = (0.15 + (d / numDrips) * 0.7 + (rnd() - 0.5) * 0.1) * w;
+				const dripLen = h * 0.18 + rnd() * (h * 0.28);
+				const dripW = Math.max(1, 1.6 + rnd() * 1.2);
+				const dX = x + dx;
+				const dY1 = y + h * 0.88;
+				const dY2 = dY1 + dripLen;
+
+				// Drip Shadow
+				ctx.strokeStyle = bloodDark;
+				ctx.lineWidth = dripW + 1.2;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(dX + 1, dY1);
+				ctx.lineTo(dX + 1, dY2 + 1);
+				ctx.stroke();
+
+				// Drip Trail
+				ctx.strokeStyle = bloodMid;
+				ctx.lineWidth = dripW;
+				ctx.beginPath();
+				ctx.moveTo(dX, dY1);
+				ctx.lineTo(dX, dY2);
+				ctx.stroke();
+
+				// Droplet tear bulb
+				const r = Math.max(0.5, dripW * 0.85);
+				ctx.fillStyle = bloodBright;
+				ctx.beginPath();
+				ctx.arc(dX, dY2, r, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		}
+
+		// 2. Blood Splatter Droplets across and around glyphs
+		const numDrops = isActive ? 8 : 6;
+		for (let s = 0; s < numDrops; s++) {
+			const sx = x + (rnd() - 0.1) * (w * 1.2);
+			const sy = y + (rnd() - 0.15) * (h * 1.3);
+			const sRad = Math.max(0.5, isActive ? (1.0 + rnd() * 2.0) : (0.8 + rnd() * 1.6));
+			const dropColor = (rnd() > 0.4) ? bloodMid : bloodDark;
+
+			// Droplet shadow
+			ctx.fillStyle = bloodDark;
+			ctx.beginPath();
+			ctx.arc(sx + 0.8, sy + 0.8, sRad, 0, Math.PI * 2);
+			ctx.fill();
+
+			// Droplet core
+			ctx.fillStyle = (rnd() > 0.5) ? bloodBright : dropColor;
+			ctx.beginPath();
+			ctx.arc(sx, sy, sRad, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
 		ctx.restore();
 	}
 

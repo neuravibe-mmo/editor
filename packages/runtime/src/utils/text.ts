@@ -156,7 +156,8 @@ export function applyFont(ctx: Ctx, world: World, entity: Entity, ranges: Entity
 				? family
 				: `"${family.replace(/^['"]|['"]$/g, '')}"`);
 
-	ctx.font = `${mappedStyle} ${weight.toLowerCase()} ${size}px ${safeFamily}, sans-serif`.trim();
+	const fallbackGeneric = (family.toLowerCase().includes('serif') || family.toLowerCase().includes('playfair') || family.toLowerCase().includes('rye')) ? 'serif' : 'sans-serif';
+	ctx.font = `${mappedStyle} ${weight.toLowerCase()} ${size}px ${safeFamily}, ${fallbackGeneric}`.trim();
 	ctx.textBaseline = mappedBaseline;
 	ctx.letterSpacing = `${spacing}px`;
 }

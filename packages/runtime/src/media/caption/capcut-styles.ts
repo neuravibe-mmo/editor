@@ -71,6 +71,10 @@ export interface CapCutAnimationConfig {
 	dimUpcoming?: boolean | number;
 	/** Whether the active word glow should pulse with speech */
 	glowPulse?: boolean;
+	/** Entrance motion animation type when subtitle phrase appears */
+	entrance?: 'bounce' | 'pop' | 'slide_up' | 'fade' | 'none';
+	/** Duration of the entrance motion animation in seconds (default: 0.24) */
+	entranceDuration?: number;
 }
 
 export interface CapCutLightningElectricConfig {
@@ -118,6 +122,8 @@ export interface CapCutPresetConfig {
 	lightningElectric?: CapCutLightningElectricConfig;
 	candyDream?: CapCutCandyDreamConfig;
 	animation?: CapCutAnimationConfig;
+	tilt?: number;
+	hollowEffect?: boolean;
 }
 
 const BASE_MONTSERRAT_STYLE: CaptionPresetStyle = {
@@ -579,18 +585,27 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		},
 	},
 
-	// 18. THE QUICK BROWN - Diagonal 3D Pink glitter block
+	// 18. THE QUICK - Bold Pink Italic with crisp black outline & NO shadow
 	capcut_18: {
 		id: 'capcut_18',
-		name: 'Khối 3D Hồng Nghiêng',
+		name: 'Hồng Nghiêng Năng Động',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
 			fontStyle: FontStyle.ITALIC,
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
 		},
-		textColor: 0xFFFFFF,
-		activeTextColor: 0xEC4899,
-		stroke: { color: 0x000000, width: 4 },
-		extrude3D: { color: 0x831843, depth: 8, dirX: 1, dirY: 1 },
+		textColor: 0xEC4899,
+		activeTextColor: 0xFFFFFF,
+		stroke: { color: 0x000000, width: 4.5 },
+		tilt: 8.4,
+		animation: {
+			scalePop: 1.20,
+			dimUpcoming: 0.65,
+		},
 	},
 
 	// 19. The Quick Brown Fox - Warm cream serif with amber gold highlight
@@ -600,32 +615,81 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		style: {
 			...BASE_MONTSERRAT_STYLE,
 			fontFamily: 'Playfair Display',
+			fontWeight: '700',
+			fontSize: 66,
+			letterSpacing: 0.5,
 			textCase: TextCase.ORIGINAL,
 		},
 		textColor: 0xFEF3C7,
-		activeTextColor: 0xD97706,
-		shadow: { color: 0x000000, x: 0, y: 3, blur: 6 },
+		activeTextColor: 0xF59E0B,
+		shadow: { color: 0x000000, x: 2, y: 4, blur: 6, opacity: 0.85 },
+		animation: {
+			scalePop: 1.16,
+			dimUpcoming: false,
+		},
 	},
 
-	// 20. THE QUICK BROWN - Colorful carnival rainbow blocks
+	// 20. THE QUICK BROWN - Colorful carnival rainbow letters with crisp black stroke & NO shadow
 	capcut_20: {
 		id: 'capcut_20',
 		name: 'Sắc Màu Lễ Hội',
-		style: BASE_MONTSERRAT_STYLE,
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontStyle: FontStyle.NORMAL,
+			fontSize: 60,
+			letterSpacing: 2,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0xFDE047,
 		activeTextColor: 0x38BDF8,
 		stroke: { color: 0x000000, width: 5 },
+		rainbowLetters: {
+			palette: [
+				0x86EFAC, // Mint Lime Green
+				0xF472B6, // Sweet Candy Pink
+				0x38BDF8, // Vivid Sky Blue
+				0xFDE047, // Bright Sun Yellow
+				0xC084FC, // Pastel Lavender Purple
+				0xFB7185, // Sweet Coral Pink
+				0x34D399, // Fresh Emerald Mint
+				0xA855F7, // Royal Lilac
+			],
+			stickers: false,
+		},
+		animation: {
+			scalePop: 1.20,
+			dimUpcoming: 0.60,
+		},
 	},
 
-	// 21. BROWN - Rich gold glitter border on dark text
+	// 21. THE QUICK - Sparkling Gold with Royal Starlight and 3D Bevel
 	capcut_21: {
 		id: 'capcut_21',
 		name: 'Hoàng Kim Lấp Lánh',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0x000000,
-		stroke: { color: 0xF59E0B, width: 8 },
-		outerStroke: { color: 0x78350F, width: 14 },
-		glow: { color: '#FBBF24', blur: 16 },
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontWeight: '900',
+			fontSize: 62,
+			letterSpacing: 0.5,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xFACC15,
+		activeTextColor: 0xFEF08A,
+		stroke: { color: 0x1C1303, width: 4.5 },
+		shadow: { color: 0x2E1B04, x: 0, y: 4, blur: 4, opacity: 0.85 },
+		glow: { color: '#F59E0B', blur: 18 },
+		royalStars: {
+			starColor: 0xFFFBEB,
+			glowColor: '#F59E0B',
+		},
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.70,
+			entrance: 'bounce',
+			entranceDuration: 0.24,
+		},
 	},
 
 	// 22. QUICK - Red Spiky Comic Burst explosion
@@ -651,20 +715,50 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 	capcut_23: {
 		id: 'capcut_23',
 		name: 'Băng Giá Bắc Cực',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0xFFFFFF,
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xF0F9FF,
 		activeTextColor: 0x38BDF8,
-		stroke: { color: 0x0F172A, width: 6 },
-		shadow: { color: 0x1E293B, x: 4, y: 5, blur: 0 },
+		stroke: { color: 0x0A1926, width: 5.5 },
+		glow: { color: '#38BDF8', blur: 16 },
+		animation: {
+			scalePop: 1.16,
+			dimUpcoming: 0.85,
+			glowPulse: true,
+			entrance: 'pop',
+			entranceDuration: 0.22,
+		},
 	},
 
-	// 24. THE QUICK BROWN - Chalk Grunge White
+	// 24. THE QUICK BROWN - Alternating Solid & Hollow Cutout Outline
 	capcut_24: {
 		id: 'capcut_24',
-		name: 'Bụi Phấn Phá Cách',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0xF8FAFC,
-		stroke: { color: 0x334155, width: 3 },
+		name: 'Chữ Rỗng Phá Cách',
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 60,
+			letterSpacing: 1.5,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xFFFFFF,
+		activeTextColor: 0xFFFFFF,
+		stroke: { color: 0x000000, width: 4.5 },
+		shadow: { color: 0x000000, x: 2, y: 3, blur: 0, opacity: 0.9 },
+		hollowEffect: true,
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.65,
+			entrance: 'pop',
+			entranceDuration: 0.20,
+		},
 	},
 
 	// 25. The Quick Brown Fox - Casual yellow handwriting script
@@ -673,52 +767,128 @@ export const CAPCUT_PRESET_CONFIGS: Record<string, CapCutPresetConfig> = {
 		name: 'Viết Tay Tự Nhiên',
 		style: {
 			...BASE_MONTSERRAT_STYLE,
-			fontStyle: FontStyle.ITALIC,
+			fontFamily: 'Dancing Script',
+			fontWeight: '700',
+			fontStyle: FontStyle.NORMAL,
+			fontSize: 66,
+			letterSpacing: 0.5,
 			textCase: TextCase.ORIGINAL,
 		},
-		textColor: 0xF59E0B,
-		activeTextColor: 0xB45309,
+		textColor: 0xFACC15,
+		activeTextColor: 0x3B1A04,
+		stroke: { color: 0x3B1A04, width: 4 },
+		shadow: { color: 0x1C1917, x: 1, y: 2, blur: 2, opacity: 0.75 },
+		background: {
+			type: 'box',
+			color: 0xFEF08A,
+			strokeColor: 0x3B1A04,
+			strokeWidth: 2,
+			radius: 10,
+			paddingX: 12,
+			paddingY: 6,
+			target: 'activeWord',
+		},
+		animation: {
+			scalePop: 1.15,
+			dimUpcoming: 0.70,
+			entrance: 'pop',
+			entranceDuration: 0.20,
+		},
 	},
 
-	// 26. Brown - Yellow Spiky Comic Burst explosion
+	// 26. Comic Pop Alternating: Red Text in Yellow Tag Box & Black Text in Yellow Spiky Burst
 	capcut_26: {
 		id: 'capcut_26',
 		name: 'Comic Vàng Nổ Gai',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0x000000,
-		activeTextColor: 0x000000,
-		stroke: { color: 0x000000, width: 3 },
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 0.5,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xFFFFFF,
+		activeTextColor: 0xEF4444,
+		stroke: { color: 0x000000, width: 4.5 },
 		background: {
 			type: 'comic_burst',
-			color: 0xFACC15,
+			color: 0xFFE600,
 			strokeColor: 0x000000,
-			strokeWidth: 5,
-			paddingX: 24,
-			paddingY: 14,
+			strokeWidth: 4.5,
+			paddingX: 20,
+			paddingY: 12,
 			target: 'activeWord',
+		},
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.45,
+			entrance: 'pop',
+			entranceDuration: 0.20,
 		},
 	},
 
-	// 27. The quick BROWN - Metallic silver with icy cyan glow
+	// 27. The quick BROWN - Metallic silver with icy cyan glow & royal starlight
 	capcut_27: {
 		id: 'capcut_27',
 		name: 'Bạc Kim Ánh Băng',
-		style: BASE_MONTSERRAT_STYLE,
-		textColor: 0xE2E8F0,
-		activeTextColor: 0x67E8F9,
-		stroke: { color: 0x1E293B, width: 4 },
-		glow: { color: '#06B6D4', blur: 16 },
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 1.0,
+			textCase: TextCase.UPPER,
+		},
+		textColor: 0xFFFFFF,
+		activeTextColor: 0x38BDF8,
+		stroke: { color: 0x0A1926, width: 4.5 },
+		glow: { color: '#00F2FF', blur: 18 },
+		royalStars: {
+			starColor: 0xF0FDFF,
+			glowColor: '#00F2FF',
+		},
+		animation: {
+			scalePop: 1.20,
+			dimUpcoming: 0.70,
+			glowPulse: true,
+			entrance: 'pop',
+			entranceDuration: 0.20,
+		},
 	},
 
 	// 28. THE QUICK BROWN - Splatter Crimson Distress
 	capcut_28: {
 		id: 'capcut_28',
 		name: 'Vết Loang Máu Đỏ',
-		style: BASE_MONTSERRAT_STYLE,
+		style: {
+			...BASE_MONTSERRAT_STYLE,
+			fontFamily: 'Montserrat',
+			fontWeight: '900',
+			fontSize: 58,
+			letterSpacing: 1.0,
+			textCase: TextCase.UPPER,
+		},
 		textColor: 0xFFFFFF,
-		activeTextColor: 0xDC2626,
-		stroke: { color: 0x000000, width: 6 },
-		shadow: { color: 0x450A0A, x: 4, y: 4, blur: 0 },
+		activeTextColor: 0xFFFFFF,
+		stroke: { color: 0x000000, width: 4.5 },
+		shadow: { color: 0x450A0A, x: 3, y: 4, blur: 2, opacity: 0.95 },
+		background: {
+			type: 'box',
+			color: 0xDC2626,
+			strokeColor: 0x450A0A,
+			strokeWidth: 2.5,
+			radius: 6,
+			paddingX: 14,
+			paddingY: 8,
+			target: 'activeWord',
+		},
+		animation: {
+			scalePop: 1.18,
+			dimUpcoming: 0.65,
+			entrance: 'pop',
+			entranceDuration: 0.20,
+		},
 	},
 
 	// 29. BROWN - Spiky Purple/Cyan Comic Burst
